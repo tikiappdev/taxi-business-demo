@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f4f6f9;
+}
+
+body {
+  margin: 0;
+  color: #172033;
+  background: #f4f6f9;
+  font-family: Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #b8c0cc transparent;
+}

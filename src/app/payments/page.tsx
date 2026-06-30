@@ -1,0 +1,261 @@
+"use client";
+
+import { useState } from "react";
+import { Download } from "lucide-react";
+import { DemoNotice } from "@/components/DemoNotice";
+import { Section } from "@/components/Section";
+import { paymentAggregates, paymentDetails, type PaymentPeriod, type PaymentType, type ReconciliationStatus } from "@/lib/demoData";
+import { formatCurrency, formatPercent } from "@/lib/format";
+
+const tabs: PaymentPeriod[] = ["日次", "週次", "月次", "期間指定"];
+const reconciliationOptions: ReconciliationStatus[] = ["突合済み", "差額あり", "未入金"];
+type DetailStatusFilter = "すべて" | ReconciliationStatus | "未入金・差額あり";
+const statusFilters: DetailStatusFilter[] = ["すべて", "突合済み", "差額あり", "未入金", "未入金・差額あり"];
+
+function detailPeriods(active: PaymentPeriod): PaymentPeriod[] {
+  if (active === "日次") return ["日次"];
+  if (active === "週次") return ["日次", "週次"];
+  return ["日次", "週次", "月次", "期間指定"];
+}
+
+function reconciliationBadge(status: ReconciliationStatus) {
+  const styles: Record<ReconciliationStatus, string> = {
+    突合済み: "bg-emerald-50 text-emerald-700",
+    差額あり: "bg-rose-50 text-rose-700",
+    未入金: "bg-amber-50 text-amber-700"
+  };
+  return <span className={`rounded px-2 py-1 text-xs font-bold ${styles[status]}`}>{status}</span>;
+}
+
+export default function PaymentsPage() {
+  const [active, setActive] = useState<PaymentPeriod>("日次");
+  const [selectedType, setSelectedType] = useState<PaymentType>("現金");
+  const [statusFilter, setStatusFilter] = useState<DetailStatusFilter>("すべて");
+  const [statusEdits, setStatusEdits] = useState<Record<string, ReconciliationStatus>>({});
+  const [memoEdits, setMemoEdits] = useState<Record<string, string>>({});
+  const aggregate = paymentAggregates[active];
+  const total = aggregate.summary.reduce((sum, item) => sum + item.amount, 0);
+  const max = Math.max(...aggregate.summary.map((item) => item.amount));
+  const selectedSummary = aggregate.summary.find((item) => item.type === selectedType);
+  const visibleDetails = paymentDetails.filter((detail) => detail.type === selectedType && detailPeriods(active).includes(detail.period));
+  const statusFor = (id: string, fallback: ReconciliationStatus) => statusEdits[id] ?? fallback;
+  const filterCounts: Record<DetailStatusFilter, number> = {
+    すべて: visibleDetails.length,
+    突合済み: visibleDetails.filter((detail) => statusFor(detail.id, detail.reconciliationStatus) === "突合済み").length,
+    差額あり: visibleDetails.filter((detail) => statusFor(detail.id, detail.reconciliationStatus) === "差額あり").length,
+    未入金: visibleDetails.filter((detail) => statusFor(detail.id, detail.reconciliationStatus) === "未入金").length,
+    "未入金・差額あり": visibleDetails.filter((detail) => {
+      const status = statusFor(detail.id, detail.reconciliationStatus);
+      return status === "未入金" || status === "差額あり";
+    }).length
+  };
+  const filteredDetails = visibleDetails.filter((detail) => {
+    const status = statusFor(detail.id, detail.reconciliationStatus);
+    if (statusFilter === "すべて") return true;
+    if (statusFilter === "未入金・差額あり") return status === "未入金" || status === "差額あり";
+    return status === statusFilter;
+  });
+
+  return (
+    <>
+      <DemoNotice title="決済集計デモの前提">
+        FA決済データを読み取った想定の固定集計です。本実装ではCSVの決済種別コードをマッピングし、日次、週次、月次、期間指定でDBから再集計できるようにします。ステータスと備考の変更、絞り込みはデモ表示です。本実装ではDB保存予定です。
+      </DemoNotice>
+
+      <Section
+        title="決済集計"
+        description={`選択中の集計期間: ${aggregate.label}。FA決済データの決済種別コードを、画面上の管理種別へ対応付けた想定です。`}
+        action={
+          <button className="rounded-md bg-slate-900 px-3 py-2 text-sm font-bold text-white" onClick={() => alert("CSV出力はデモ版のため実ファイルを作成しません。")}>
+            <Download className="mr-1 inline" size={16} />
+            CSV出力
+          </button>
+        }
+      >
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              className={`rounded-md border px-4 py-2 text-sm font-bold ${
+                active === tab ? "border-slate-900 bg-slate-900 text-white" : "border-line bg-white text-slate-700"
+              }`}
+              onClick={() => setActive(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+          {active === "期間指定" ? (
+            <div className="flex gap-2">
+              <input type="date" defaultValue="2026-06-01" className="rounded-md border border-line px-3 py-2 text-sm" />
+              <input type="date" defaultValue="2026-06-30" className="rounded-md border border-line px-3 py-2 text-sm" />
+            </div>
+          ) : null}
+          <span className="rounded-md bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700">
+            {aggregate.range}
+          </span>
+        </div>
+        <div className="space-y-4">
+          {aggregate.summary.map((item) => {
+            const activeType = item.type === selectedType;
+            return (
+            <button
+              key={item.type}
+              className={`grid w-full gap-3 rounded-lg border p-4 text-left transition lg:grid-cols-[180px_1fr_120px_100px] lg:items-center ${
+                activeType ? "border-slate-900 bg-slate-100 shadow-sm" : "border-line bg-slate-50 hover:border-slate-400 hover:bg-white"
+              }`}
+              onClick={() => setSelectedType(item.type)}
+            >
+              <div>
+                <p className="font-bold text-ink">{item.type}</p>
+                <p className="text-xs text-muted">コード {item.code}</p>
+                {activeType ? <p className="mt-1 text-xs font-bold text-slate-700">選択中</p> : null}
+              </div>
+              <div>
+                <div className="h-3 rounded bg-white">
+                  <div className="h-3 rounded bg-slate-700" style={{ width: `${Math.max(3, (item.amount / max) * 100)}%` }} />
+                </div>
+              </div>
+              <div className="text-sm">
+                <p className="font-bold">{formatCurrency(item.amount)}</p>
+                <p className="text-xs text-muted">{item.count}件</p>
+              </div>
+              <p className="text-sm font-bold text-slate-700">{formatPercent((item.amount / total) * 100)}</p>
+            </button>
+          );})}
+        </div>
+      </Section>
+
+      <Section
+        title="決済利用明細"
+        description={`選択中: ${selectedType} / ${active}。ステータスと備考の変更、絞り込みはデモ表示です。本実装ではDB保存予定です。`}
+        action={<span className="rounded bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">表示 {filteredDetails.length}件 / 全{visibleDetails.length}件</span>}
+      >
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <div className="rounded-md border border-line bg-slate-50 p-3">
+            <p className="text-xs text-muted">選択中の決済種別</p>
+            <p className="mt-1 text-lg font-bold text-ink">{selectedType}</p>
+          </div>
+          <div className="rounded-md border border-line bg-slate-50 p-3">
+            <p className="text-xs text-muted">集計金額</p>
+            <p className="mt-1 text-lg font-bold text-ink">{formatCurrency(selectedSummary?.amount ?? 0)}</p>
+          </div>
+          <div className="rounded-md border border-line bg-slate-50 p-3">
+            <p className="text-xs text-muted">突合済み</p>
+            <p className="mt-1 text-lg font-bold text-ink">{visibleDetails.filter((detail) => (statusEdits[detail.id] ?? detail.reconciliationStatus) === "突合済み").length}件</p>
+          </div>
+          <div className="rounded-md border border-line bg-slate-50 p-3">
+            <p className="text-xs text-muted">未入金/差額あり</p>
+            <p className="mt-1 text-lg font-bold text-ink">
+              {visibleDetails.filter((detail) => {
+                const status = statusEdits[detail.id] ?? detail.reconciliationStatus;
+                return status === "未入金" || status === "差額あり";
+              }).length}件
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-4 rounded-lg border border-line bg-slate-50 p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-ink">突合ステータスで絞り込み</p>
+            <p className="text-xs text-muted">未入金・差額ありは要確認明細の確認用です。</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {statusFilters.map((filter) => {
+              const selected = statusFilter === filter;
+              const attention = filter === "未入金・差額あり";
+              return (
+                <button
+                  key={filter}
+                  className={`rounded-md border px-3 py-2 text-sm font-bold transition ${
+                    selected
+                      ? attention
+                        ? "border-amber-700 bg-amber-100 text-amber-900"
+                        : "border-slate-900 bg-slate-900 text-white"
+                      : attention
+                        ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                        : "border-line bg-white text-slate-700 hover:bg-slate-100"
+                  }`}
+                  onClick={() => setStatusFilter(filter)}
+                >
+                  {filter} {filterCounts[filter]}件
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-lg border border-line table-scroll">
+          <table className="w-full min-w-[860px] text-left text-sm">
+            <colgroup>
+              <col className="w-36" />
+              <col className="w-24" />
+              <col className="w-28" />
+              <col className="w-28" />
+              <col />
+              <col className="w-24" />
+              <col className="w-24" />
+            </colgroup>
+            <thead className="bg-slate-50 text-xs text-muted">
+              <tr>
+                <th className="whitespace-nowrap px-3 py-3">利用日時</th>
+                <th className="whitespace-nowrap px-3 py-3">決済種別</th>
+                <th className="whitespace-nowrap px-3 py-3 text-right">決済金額</th>
+                <th className="whitespace-nowrap px-3 py-3">突合ステータス</th>
+                <th className="px-3 py-3">備考</th>
+                <th className="whitespace-nowrap px-3 py-3">乗務員コード</th>
+                <th className="whitespace-nowrap px-3 py-3">車両コード</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {filteredDetails.map((detail) => {
+                const currentStatus = statusFor(detail.id, detail.reconciliationStatus);
+                const currentMemo = memoEdits[detail.id] ?? detail.memo;
+                return (
+                <tr key={detail.id}>
+                  <td className="whitespace-nowrap px-3 py-3 font-medium">{detail.usedAt}</td>
+                  <td className="whitespace-nowrap px-3 py-3">{detail.type}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right font-bold">{formatCurrency(detail.amount)}</td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      {reconciliationBadge(currentStatus)}
+                      <select
+                        value={currentStatus}
+                        onChange={(event) => setStatusEdits((current) => ({ ...current, [detail.id]: event.target.value as ReconciliationStatus }))}
+                        className="rounded-md border border-line bg-white px-2 py-1 text-xs font-medium text-ink"
+                        aria-label={`${detail.id}の突合ステータス`}
+                      >
+                        {reconciliationOptions.map((status) => (
+                          <option key={status} value={status}>{status}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </td>
+                  <td className="min-w-56 px-3 py-3">
+                    <input
+                      value={currentMemo}
+                      onChange={(event) => setMemoEdits((current) => ({ ...current, [detail.id]: event.target.value }))}
+                      className="w-full rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+                      placeholder="備考を入力"
+                    />
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">{detail.driverCode}</td>
+                  <td className="whitespace-nowrap px-3 py-3">{detail.vehicleCode}</td>
+                </tr>
+              );})}
+            </tbody>
+          </table>
+          {visibleDetails.length === 0 ? (
+            <div className="rounded-b-lg border border-t-0 border-line bg-slate-50 p-6 text-center text-sm text-muted">
+              選択中の期間・決済種別に該当する明細デモデータはありません。
+            </div>
+          ) : null}
+          {visibleDetails.length > 0 && filteredDetails.length === 0 ? (
+            <div className="rounded-b-lg border border-t-0 border-line bg-slate-50 p-6 text-center text-sm text-muted">
+              該当する明細はありません。
+            </div>
+          ) : null}
+        </div>
+      </Section>
+    </>
+  );
+}
