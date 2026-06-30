@@ -16,6 +16,7 @@ export type ExpenseCategory =
   | "洗車代"
   | "修理代"
   | "通信費"
+  | "事業用備品"
   | "その他";
 
 export type DayStatus = "取込済み" | "営業なし" | "CSV未取込";
@@ -108,8 +109,8 @@ export const dailyReports: Record<string, DailyReport> = {
     cashlessRatio: 62.4,
     expenses: 7200,
     profit: 47620,
-    driverCode: "D-1018",
-    vehicleCode: "TAXI-15",
+    driverCode: "D-1024",
+    vehicleCode: "TAXI-27",
     departureTime: "07:36",
     arrivalTime: "20:48",
     payments: makePayments([
@@ -124,11 +125,11 @@ export const dailyReports: Record<string, DailyReport> = {
       ["その他", 400, 0]
     ]),
     trips: [
-      { id: "F4-024-01", start: "08:02", end: "08:26", from: "営業所前", to: "駅前", distance: "5.4km", fare: 2640, payment: "現金" },
+      { id: "F4-024-01", start: "08:02", end: "08:26", from: "自宅車庫前", to: "駅前", distance: "5.4km", fare: 2640, payment: "現金" },
       { id: "F4-024-02", start: "09:14", end: "09:52", from: "駅前", to: "大学病院", distance: "13.1km", fare: 6240, payment: "クレジット" },
       { id: "F4-024-03", start: "12:05", end: "12:24", from: "市役所", to: "商業施設", distance: "4.8km", fare: 2380, payment: "交通系IC" },
       { id: "F4-024-04", start: "17:42", end: "18:10", from: "駅前", to: "住宅街A", distance: "8.7km", fare: 4160, payment: "QR決済" },
-      { id: "F4-024-05", start: "20:02", end: "20:32", from: "繁華街", to: "営業所前", distance: "9.6km", fare: 4580, payment: "現金" }
+      { id: "F4-024-05", start: "20:02", end: "20:32", from: "繁華街", to: "自宅車庫前", distance: "9.6km", fare: 4580, payment: "現金" }
     ]
   },
   "2026-06-25": {
@@ -174,8 +175,8 @@ export const dailyReports: Record<string, DailyReport> = {
     cashlessRatio: 63.3,
     expenses: 22800,
     profit: 38480,
-    driverCode: "D-1033",
-    vehicleCode: "TAXI-08",
+    driverCode: "D-1024",
+    vehicleCode: "TAXI-27",
     departureTime: "08:12",
     arrivalTime: "22:05",
     payments: makePayments([
@@ -190,7 +191,7 @@ export const dailyReports: Record<string, DailyReport> = {
       ["その他", 400, 1]
     ]),
     trips: [
-      { id: "F4-026-01", start: "08:44", end: "09:13", from: "営業所前", to: "駅前", distance: "7.1km", fare: 3380, payment: "現金" },
+      { id: "F4-026-01", start: "08:44", end: "09:13", from: "自宅車庫前", to: "駅前", distance: "7.1km", fare: 3380, payment: "現金" },
       { id: "F4-026-02", start: "10:22", end: "10:55", from: "駅前", to: "市役所", distance: "9.7km", fare: 4620, payment: "クレジット" },
       { id: "F4-026-03", start: "14:08", end: "14:44", from: "商業施設", to: "大学病院", distance: "12.4km", fare: 5860, payment: "交通系IC" },
       { id: "F4-026-04", start: "18:16", end: "18:48", from: "駅前", to: "住宅街B", distance: "9.1km", fare: 4280, payment: "QR決済" },
@@ -207,8 +208,8 @@ export const dailyReports: Record<string, DailyReport> = {
     cashlessRatio: 68.1,
     expenses: 11200,
     profit: 63460,
-    driverCode: "D-1033",
-    vehicleCode: "TAXI-08",
+    driverCode: "D-1024",
+    vehicleCode: "TAXI-27",
     departureTime: "06:52",
     arrivalTime: "23:08",
     payments: makePayments([
@@ -251,7 +252,7 @@ export const dailyReports: Record<string, DailyReport> = {
   "2026-06-29": {
     date: "2026-06-29",
     status: "CSV未取込",
-    note: "CSV未取込日のサンプルです。事務所側でCSV取込が必要な状態を示します。",
+    note: "CSV未取込日のサンプルです。その日の営業CSV取込が必要な状態を示します。",
     sales: 0,
     monthlySales: 1773500,
     tripCount: 0,
@@ -319,24 +320,34 @@ export const paymentSummary = todaySummary.payments;
 export const trips = todaySummary.trips;
 
 export const expenses = [
-  { id: "EX-024-01", date: "2026-06-24", category: "ガソリン代" as ExpenseCategory, amount: 6200, method: "法人カード", memo: "通常給油" },
+  { id: "EX-004-01", date: "2026-04-03", category: "ガソリン代" as ExpenseCategory, amount: 7600, method: "事業用カード", memo: "月初給油" },
+  { id: "EX-004-02", date: "2026-04-08", category: "通信費" as ExpenseCategory, amount: 2200, method: "口座振替", memo: "配車アプリ通信費" },
+  { id: "EX-004-03", date: "2026-04-12", category: "駐車場代" as ExpenseCategory, amount: 1800, method: "現金", memo: "駅前待機場" },
+  { id: "EX-004-04", date: "2026-04-18", category: "洗車代" as ExpenseCategory, amount: 1500, method: "現金", memo: "定期洗車" },
+  { id: "EX-004-05", date: "2026-04-25", category: "保険料" as ExpenseCategory, amount: 18200, method: "口座振替", memo: "事業用車両保険" },
+  { id: "EX-005-01", date: "2026-05-02", category: "ガソリン代" as ExpenseCategory, amount: 8300, method: "事業用カード", memo: "連休営業前給油" },
+  { id: "EX-005-02", date: "2026-05-10", category: "修理代" as ExpenseCategory, amount: 12400, method: "事業用カード", memo: "オイル交換・点検" },
+  { id: "EX-005-03", date: "2026-05-15", category: "事業用備品" as ExpenseCategory, amount: 3600, method: "事業用カード", memo: "車内清掃用品" },
+  { id: "EX-005-04", date: "2026-05-21", category: "駐車場代" as ExpenseCategory, amount: 2400, method: "現金", memo: "駅前待機場" },
+  { id: "EX-005-05", date: "2026-05-29", category: "通信費" as ExpenseCategory, amount: 2200, method: "口座振替", memo: "車載端末通信" },
+  { id: "EX-024-01", date: "2026-06-24", category: "ガソリン代" as ExpenseCategory, amount: 6200, method: "事業用カード", memo: "通常給油" },
   { id: "EX-024-02", date: "2026-06-24", category: "駐車場代" as ExpenseCategory, amount: 1000, method: "現金", memo: "駅前待機場" },
-  { id: "EX-025-01", date: "2026-06-25", category: "ガソリン代" as ExpenseCategory, amount: 8200, method: "法人カード", memo: "長距離営業後給油" },
+  { id: "EX-025-01", date: "2026-06-25", category: "ガソリン代" as ExpenseCategory, amount: 8200, method: "事業用カード", memo: "長距離営業後給油" },
   { id: "EX-025-02", date: "2026-06-25", category: "洗車代" as ExpenseCategory, amount: 1600, method: "現金", memo: "夜勤前洗車" },
-  { id: "EX-026-01", date: "2026-06-26", category: "修理代" as ExpenseCategory, amount: 16800, method: "法人カード", memo: "タイヤ交換" },
-  { id: "EX-026-02", date: "2026-06-26", category: "ガソリン代" as ExpenseCategory, amount: 6000, method: "法人カード", memo: "通常給油" },
+  { id: "EX-026-01", date: "2026-06-26", category: "修理代" as ExpenseCategory, amount: 16800, method: "事業用カード", memo: "タイヤ交換" },
+  { id: "EX-026-02", date: "2026-06-26", category: "ガソリン代" as ExpenseCategory, amount: 6000, method: "事業用カード", memo: "通常給油" },
   { id: "EX-027-01", date: "2026-06-27", category: "通信費" as ExpenseCategory, amount: 2000, method: "口座振替", memo: "車載端末通信" },
-  { id: "EX-027-02", date: "2026-06-27", category: "ガソリン代" as ExpenseCategory, amount: 9200, method: "法人カード", memo: "週末営業給油" },
-  { id: "EX-030-01", date: "2026-06-30", category: "ガソリン代" as ExpenseCategory, amount: 8200, method: "法人カード", memo: "夜勤前給油" },
+  { id: "EX-027-02", date: "2026-06-27", category: "ガソリン代" as ExpenseCategory, amount: 9200, method: "事業用カード", memo: "週末営業給油" },
+  { id: "EX-030-01", date: "2026-06-30", category: "ガソリン代" as ExpenseCategory, amount: 8200, method: "事業用カード", memo: "夜勤前給油" },
   { id: "EX-030-02", date: "2026-06-30", category: "駐車場代" as ExpenseCategory, amount: 1400, method: "現金", memo: "駅前待機場" }
 ];
 
 export const csvImports = [
   { fileName: "LT27_20260630_D1024_TAXI27.csv", importedAt: "2026-06-30 22:55", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-30"].sales },
-  { fileName: "LT27_20260627_D1033_TAXI08.csv", importedAt: "2026-06-27 23:18", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-27"].sales },
-  { fileName: "LT27_20260626_D1033_TAXI08.csv", importedAt: "2026-06-26 22:14", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-26"].sales },
+  { fileName: "LT27_20260627_D1024_TAXI27.csv", importedAt: "2026-06-27 23:18", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-27"].sales },
+  { fileName: "LT27_20260626_D1024_TAXI27.csv", importedAt: "2026-06-26 22:14", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-26"].sales },
   { fileName: "LT27_20260625_D1024_TAXI27.csv", importedAt: "2026-06-25 23:45", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-25"].sales },
-  { fileName: "LT27_20260624_D1018_TAXI15.csv", importedAt: "2026-06-24 21:02", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-24"].sales },
+  { fileName: "LT27_20260624_D1024_TAXI27.csv", importedAt: "2026-06-24 21:02", status: "取込済み", records: "F1/F2/F4/F3/FA", sales: dailyReports["2026-06-24"].sales },
   { fileName: "LT27_20260629_未取込.csv", importedAt: "-", status: "CSV未取込", records: "-", sales: 0 }
 ];
 
@@ -402,12 +413,12 @@ export const paymentAggregates: Record<PaymentPeriod, { label: string; range: st
 };
 
 export const paymentDetails: PaymentDetail[] = [
-  { id: "PAY-024-01", period: "週次", usedAt: "2026-06-24 09:52", type: "クレジット", amount: 6240, driverCode: "D-1018", vehicleCode: "TAXI-15", memo: "カード会社入金確認済み", reconciliationStatus: "突合済み" },
-  { id: "PAY-024-02", period: "週次", usedAt: "2026-06-24 12:24", type: "交通系IC", amount: 2380, driverCode: "D-1018", vehicleCode: "TAXI-15", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
+  { id: "PAY-024-01", period: "週次", usedAt: "2026-06-24 09:52", type: "クレジット", amount: 6240, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "カード入金確認済み", reconciliationStatus: "突合済み" },
+  { id: "PAY-024-02", period: "週次", usedAt: "2026-06-24 12:24", type: "交通系IC", amount: 2380, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
   { id: "PAY-025-01", period: "週次", usedAt: "2026-06-25 08:05", type: "クレジット", amount: 10680, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
   { id: "PAY-025-02", period: "週次", usedAt: "2026-06-25 19:06", type: "QR決済", amount: 7860, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "手数料差額確認中", reconciliationStatus: "差額あり" },
-  { id: "PAY-026-01", period: "週次", usedAt: "2026-06-26 10:55", type: "クレジット", amount: 4620, driverCode: "D-1033", vehicleCode: "TAXI-08", memo: "入金待ち", reconciliationStatus: "未入金" },
-  { id: "PAY-027-01", period: "週次", usedAt: "2026-06-27 19:04", type: "QR決済", amount: 7620, driverCode: "D-1033", vehicleCode: "TAXI-08", memo: "QR決済入金確認済み", reconciliationStatus: "突合済み" },
+  { id: "PAY-026-01", period: "週次", usedAt: "2026-06-26 10:55", type: "クレジット", amount: 4620, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "入金待ち", reconciliationStatus: "未入金" },
+  { id: "PAY-027-01", period: "週次", usedAt: "2026-06-27 19:04", type: "QR決済", amount: 7620, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "QR決済入金確認済み", reconciliationStatus: "突合済み" },
   { id: "PAY-030-01", period: "日次", usedAt: "2026-06-30 08:05", type: "交通系IC", amount: 2420, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
   { id: "PAY-030-02", period: "日次", usedAt: "2026-06-30 08:51", type: "クレジット", amount: 8460, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
   { id: "PAY-030-03", period: "日次", usedAt: "2026-06-30 09:38", type: "現金", amount: 1780, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "現金受領済み", reconciliationStatus: "突合済み" },
@@ -416,8 +427,8 @@ export const paymentDetails: PaymentDetail[] = [
   { id: "PAY-030-06", period: "日次", usedAt: "2026-06-30 14:58", type: "ネット決済", amount: 10840, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
   { id: "PAY-030-07", period: "日次", usedAt: "2026-06-30 18:47", type: "QUICPay", amount: 4520, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "入金待ち", reconciliationStatus: "未入金" },
   { id: "PAY-030-08", period: "日次", usedAt: "2026-06-30 21:34", type: "現金", amount: 5260, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "現金受領済み", reconciliationStatus: "突合済み" },
-  { id: "PAY-M01", period: "月次", usedAt: "2026-06-15 15:30", type: "交通系IC", amount: 3240, driverCode: "D-1018", vehicleCode: "TAXI-15", memo: "交通系IC入金確認済み", reconciliationStatus: "突合済み" },
-  { id: "PAY-M02", period: "月次", usedAt: "2026-06-18 20:12", type: "iD", amount: 2860, driverCode: "D-1033", vehicleCode: "TAXI-08", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
+  { id: "PAY-M01", period: "月次", usedAt: "2026-06-15 15:30", type: "交通系IC", amount: 3240, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "交通系IC入金確認済み", reconciliationStatus: "突合済み" },
+  { id: "PAY-M02", period: "月次", usedAt: "2026-06-18 20:12", type: "iD", amount: 2860, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "翌営業日入金予定", reconciliationStatus: "未入金" },
   { id: "PAY-M03", period: "月次", usedAt: "2026-06-22 18:44", type: "現金", amount: 4920, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "現金受領済み", reconciliationStatus: "突合済み" },
   { id: "PAY-R01", period: "期間指定", usedAt: "2026-06-25 22:05", type: "その他", amount: 400, driverCode: "D-1024", vehicleCode: "TAXI-27", memo: "", reconciliationStatus: "未入金" }
 ];
@@ -441,9 +452,9 @@ export const calendarDays = Array.from({ length: 30 }, (_, index) => {
 });
 
 export const companySettings = {
-  companyName: "東都サンプル交通株式会社",
-  officeCode: "TOKYO-001",
-  drivers: ["D-1024 山田 太郎", "D-1018 佐藤 花子", "D-1033 鈴木 健"],
-  vehicles: ["TAXI-27 クラウン", "TAXI-15 JPN TAXI", "TAXI-08 セダン"],
+  companyName: "山田個人タクシー",
+  officeCode: "TAXI-001",
+  drivers: ["D-1024 山田 太郎（本人）"],
+  vehicles: ["TAXI-27 JPN TAXI（事業用車両）"],
   csvRules: ["F1を営業管理として先頭確認", "F2/F3で出入庫時刻を採用", "F4を営業明細として集計", "FAの決済種別コードを種別へマッピング"]
 };

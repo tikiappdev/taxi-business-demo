@@ -24,7 +24,7 @@ function DailyReportContent() {
     return (
       <>
         <DemoNotice title="日報デモの前提">
-          URLの日付に応じて日報デモデータを切り替えます。登録されていない日は空状態を表示します。
+          URLの日付に応じて日報デモデータを切り替えます。登録されていない日は空状態を表示します。本実装では事業者ごとの取込済みCSVとDB保存データを参照する想定です。
         </DemoNotice>
         <Section
           title="デモデータ未登録日"
@@ -40,7 +40,7 @@ function DailyReportContent() {
         >
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
             <p className="text-lg font-bold text-ink">{selectedDate}</p>
-            <p className="mt-2 text-sm text-muted">デモデータ未登録日です。本実装ではDBから対象日の取込状況と日報を検索する想定です。</p>
+            <p className="mt-2 text-sm text-muted">デモデータ未登録日です。本実装では事業者ごとのDBから対象日の取込状況と日報を検索する想定です。</p>
             <div className="mt-5 flex flex-wrap justify-center gap-2">
               {availableDates.map((date) => (
                 <Link key={date} href={`/daily-report?date=${date}`} className="rounded-md border border-line bg-white px-3 py-2 text-sm font-bold hover:bg-slate-100">
@@ -62,7 +62,7 @@ function DailyReportContent() {
         </DemoNotice>
         <Section
           title="CSV未取込日"
-          description="この日は事務所側で営業CSVがまだ取り込まれていない想定です。カレンダー上でも未取込日として確認できます。"
+          description="この日は営業CSVがまだ取り込まれていない想定です。カレンダー上でも、その日の営業CSVが未取込の日として確認できます。"
           action={
             <input
               type="date"
@@ -75,7 +75,7 @@ function DailyReportContent() {
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-8 text-center">
             <p className="text-lg font-bold text-amber-900">{report.date}</p>
             <p className="mt-2 text-sm leading-6 text-amber-900">{report.note}</p>
-            <p className="mt-3 text-sm text-amber-800">本実装ではCSV取込後に、日報、決済集計、カレンダーの金額へ自動反映する想定です。</p>
+            <p className="mt-3 text-sm text-amber-800">本実装ではCSV取込後に、日報、決済集計、カレンダー、月次・確定申告向け集計へ自動反映する想定です。</p>
             <div className="mt-5 flex flex-wrap justify-center gap-2">
               {availableDates.map((date) => (
                 <Link key={date} href={`/daily-report?date=${date}`} className="rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-bold hover:bg-amber-100">
@@ -91,8 +91,8 @@ function DailyReportContent() {
 
   const reportRows = [
     ["取込状態", report.status],
-    ["乗務員コード", report.driverCode],
-    ["車両コード", report.vehicleCode],
+    ["CSV上の乗務員コード", report.driverCode],
+    ["CSV上の車両コード", report.vehicleCode],
     ["出庫時刻", report.departureTime],
     ["入庫時刻", report.arrivalTime],
     ["営業回数", `${report.tripCount}回`],
@@ -102,7 +102,7 @@ function DailyReportContent() {
   return (
     <>
       <DemoNotice title="日報デモの前提">
-        日付選択またはカレンダーからの遷移で、日報デモデータが切り替わります。本実装では取込済みCSVとDB保存データから、乗務員別・車両別の日報を自動生成する想定です。
+        日付選択またはカレンダーからの遷移で、日報デモデータが切り替わります。日々の売上確認、決済内訳確認、月次・確定申告向けの元データとして使う想定です。本実装では取込済みCSVとDB保存データから日報を自動生成します。
       </DemoNotice>
 
       <section className="rounded-lg border border-slate-300 bg-white shadow-sm">
@@ -111,7 +111,7 @@ function DailyReportContent() {
             <div>
               <p className="text-sm font-bold text-slate-500">営業日報</p>
               <h2 className="mt-1 text-2xl font-bold tracking-normal text-ink">{report.date} 乗務日報</h2>
-              <p className="mt-2 text-sm text-muted">LT27 CSV取込結果を日報帳票に反映した場合の表示例です。</p>
+              <p className="mt-2 text-sm text-muted">LT27 CSV取込結果を日報帳票に反映し、申告・保管用の帳票出力へつなげる表示例です。</p>
               <p className="mt-2 text-sm font-bold text-slate-700">{report.note}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {availableDates.map((date) => (

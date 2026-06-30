@@ -59,12 +59,12 @@ export default function PaymentsPage() {
   return (
     <>
       <DemoNotice title="決済集計デモの前提">
-        FA決済データを読み取った想定の固定集計です。本実装ではCSVの決済種別コードをマッピングし、日次、週次、月次、期間指定でDBから再集計できるようにします。ステータスと備考の変更、絞り込みはデモ表示です。本実装ではDB保存予定です。
+        FA決済データを読み取った想定の固定集計です。キャッシュレス決済や現金売上を確認し、入金確認のために明細ごとに「突合済み」「差額あり」「未入金」を管理できる見せ方にしています。ステータスと備考の変更、絞り込みはデモ表示です。本実装では事業者ごとのDBに保存予定です。
       </DemoNotice>
 
       <Section
         title="決済集計"
-        description={`選択中の集計期間: ${aggregate.label}。FA決済データの決済種別コードを、画面上の管理種別へ対応付けた想定です。`}
+        description={`選択中の集計期間: ${aggregate.label}。FA決済データの決済種別コードを、個人タクシーの入金確認で見やすい種別へ対応付けた想定です。`}
         action={
           <button className="rounded-md bg-slate-900 px-3 py-2 text-sm font-bold text-white" onClick={() => alert("CSV出力はデモ版のため実ファイルを作成しません。")}>
             <Download className="mr-1 inline" size={16} />
@@ -127,7 +127,7 @@ export default function PaymentsPage() {
 
       <Section
         title="決済利用明細"
-        description={`選択中: ${selectedType} / ${active}。ステータスと備考の変更、絞り込みはデモ表示です。本実装ではDB保存予定です。`}
+        description={`選択中: ${selectedType} / ${active}。未入金・差額ありだけを絞り込んで確認できます。ステータスと備考の変更、絞り込みはデモ表示です。本実装では事業者ごとのDBに保存予定です。`}
         action={<span className="rounded bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">表示 {filteredDetails.length}件 / 全{visibleDetails.length}件</span>}
       >
         <div className="mb-4 grid gap-3 md:grid-cols-4">
@@ -202,8 +202,8 @@ export default function PaymentsPage() {
                 <th className="whitespace-nowrap px-3 py-3 text-right">決済金額</th>
                 <th className="whitespace-nowrap px-3 py-3">突合ステータス</th>
                 <th className="px-3 py-3">備考</th>
-                <th className="whitespace-nowrap px-3 py-3">乗務員コード</th>
-                <th className="whitespace-nowrap px-3 py-3">車両コード</th>
+                <th className="whitespace-nowrap px-3 py-3">CSV乗務員コード</th>
+                <th className="whitespace-nowrap px-3 py-3">CSV車両コード</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">

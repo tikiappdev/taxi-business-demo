@@ -9,11 +9,11 @@ export default function DashboardPage() {
   const maxSales = Math.max(...monthlyTrend.map((item) => item.sales));
   const totalPayments = paymentSummary.reduce((sum, item) => sum + item.amount, 0);
   const calendarMonthSales = calendarDays.reduce((sum, day) => sum + day.sales, 0);
-  const serviceFlow = ["CSV取込", "日報生成", "決済集計", "カレンダー確認", "経費管理"];
+  const serviceFlow = ["営業CSV取込", "日報確認", "決済・未入金確認", "経費登録", "月次・申告向け集計確認"];
 
   return (
     <>
-      <Section title="サービス概要" description="タクシー事業者の営業CSVを、日々の管理画面へつなげる業務管理デモです。">
+      <Section title="サービス概要" description="個人タクシー事業者向け 営業CSV・売上・経費管理デモです。">
         <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-lg border border-line bg-slate-50 p-5">
             <div className="flex items-start gap-3">
@@ -21,21 +21,21 @@ export default function DashboardPage() {
                 <FileUp size={22} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-ink">CSV取込後の事務作業を一画面で確認</h3>
+                <h3 className="text-lg font-bold text-ink">営業CSV取込後の売上・経費確認を一画面で整理</h3>
                 <p className="mt-2 leading-7 text-slate-700">
-                  LT27営業CSVの取込を起点に、日報、決済種別別の集計、月間カレンダー、経費登録までをつなげて見せる商談用デモです。
-                  本画面では実データ保存を行わず、事業者との運用確認や必要項目のすり合わせに使えるよう固定データで構成しています。
+                  LT27営業CSVの取込を起点に、日々の売上、決済内訳、経費、未入金状況、月次確認までをつなげて見せる商談用デモです。
+                  確定申告や月次確認の事務作業を減らすWebツールとして、運用確認や必要項目のすり合わせに使えるよう固定データで構成しています。
                 </p>
               </div>
             </div>
           </div>
           <DemoNotice title="商談用デモの前提">
-            これは画面イメージ確認用のデモ表示です。本実装ではCSV解析、DB保存、権限管理、帳票出力を接続する想定です。
+            これは個人タクシー事業者向けの画面イメージ確認用デモです。本実装ではCSV解析、事業者ごとのDB保存、帳票出力、確定申告向け集計を接続する想定です。
           </DemoNotice>
         </div>
       </Section>
 
-      <Section title="利用フロー" description="CSVを取り込んだ後、管理者が確認する流れを画面上で説明できます。">
+      <Section title="利用フロー" description="営業CSVを取り込んだ後、日々の確認から月次・申告準備までの流れを説明できます。">
         <div className="grid gap-3 md:grid-cols-5">
           {serviceFlow.map((step, index) => (
             <div key={step} className="rounded-lg border border-line bg-white p-4">
@@ -45,11 +45,11 @@ export default function DashboardPage() {
               </div>
               <p className="mt-4 text-sm font-bold text-ink">{step}</p>
               <p className="mt-2 text-xs leading-5 text-muted">
-                {index === 0 && "F1/F2/F3/F4/FAを検出した想定でプレビューします。"}
-                {index === 1 && "営業明細と決済内訳を日報形式で確認します。"}
-                {index === 2 && "現金、カード、IC、QR等を種別別に把握します。"}
-                {index === 3 && "日別の売上、経費、利益、未取込日を確認します。"}
-                {index === 4 && "燃料代などの経費を利益確認に反映します。"}
+                {index === 0 && "F1/F2/F3/F4/FAを検出した想定で営業CSVをプレビューします。"}
+                {index === 1 && "その日の売上、営業明細、決済内訳を帳票形式で確認します。"}
+                {index === 2 && "現金、カード、IC、QR等と未入金・差額ありを確認します。"}
+                {index === 3 && "ガソリン代や駐車場代などの事業用経費を記録します。"}
+                {index === 4 && "月別の売上、経費、利益を申告準備に使える形で確認します。"}
               </p>
             </div>
           ))}
@@ -57,16 +57,16 @@ export default function DashboardPage() {
       </Section>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="本日売上" value={formatCurrency(todaySummary.sales)} sub="F4営業時系列とFA決済の集計想定" icon={<Banknote size={20} />} />
-        <StatCard label="今月売上" value={formatCurrency(calendarMonthSales)} sub="カレンダー今月合計と同一" icon={<TrendingUp size={20} />} />
+        <StatCard label="本日売上" value={formatCurrency(todaySummary.sales)} sub="日々の営業CSVから確認" icon={<Banknote size={20} />} />
+        <StatCard label="今月売上" value={formatCurrency(calendarMonthSales)} sub="月次確認・確定申告準備" icon={<TrendingUp size={20} />} />
         <StatCard label="営業回数" value={`${formatNumber(todaySummary.tripCount)}回`} sub="F4レコード件数から算出" icon={<CarTaxiFront size={20} />} />
-        <StatCard label="キャッシュレス比率" value={formatPercent(todaySummary.cashlessRatio)} sub="現金以外の決済金額比率" icon={<WalletCards size={20} />} />
-        <StatCard label="経費合計" value={formatCurrency(todaySummary.expenses)} sub="ガソリン代・駐車場代など" icon={<Fuel size={20} />} />
-        <StatCard label="差引利益" value={formatCurrency(todaySummary.profit)} sub="売上合計 - 経費合計" icon={<ReceiptText size={20} />} />
+        <StatCard label="キャッシュレス比率" value={formatPercent(todaySummary.cashlessRatio)} sub="入金確認が必要な決済を把握" icon={<WalletCards size={20} />} />
+        <StatCard label="経費合計" value={formatCurrency(todaySummary.expenses)} sub="ガソリン代・駐車場代などの事業用経費" icon={<Fuel size={20} />} />
+        <StatCard label="差引利益" value={formatCurrency(todaySummary.profit)} sub="売上合計 - 事業用経費" icon={<ReceiptText size={20} />} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Section title="最近取り込んだCSV" description="実保存はせず、取込履歴風の固定データを表示しています。">
+        <Section title="最近取り込んだCSV" description="個人タクシーの営業CSVを取り込んだ履歴として、実保存なしの固定データを表示しています。">
           <div className="overflow-x-auto table-scroll">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-muted">
@@ -95,7 +95,7 @@ export default function DashboardPage() {
           </div>
         </Section>
 
-        <Section title="今日の決済内訳" description="FA決済データの決済種別コードをマッピングした表示です。">
+        <Section title="今日の決済内訳" description="FA決済データの決済種別コードを、入金確認しやすい分類へマッピングした表示です。">
           <div className="space-y-3">
             {paymentSummary.slice(0, 6).map((item) => (
               <div key={item.type}>
@@ -112,7 +112,7 @@ export default function DashboardPage() {
         </Section>
       </div>
 
-      <Section title="月間売上推移" description="CSV取込済み日の営業売上を時系列で確認する想定です。">
+      <Section title="月間売上推移" description="CSV取込済み日の営業売上を時系列で確認し、月次確認や確定申告準備に使う想定です。">
         <div className="flex h-64 items-end gap-4 overflow-x-auto border-b border-line px-2 pt-4">
           {monthlyTrend.map((item) => (
             <div key={item.label} className="flex min-w-20 flex-1 flex-col items-center gap-2">

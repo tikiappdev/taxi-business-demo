@@ -4,8 +4,8 @@ import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "タクシー業務管理デモ",
-  description: "CSV取込から日報、決済集計、カレンダー、経費管理までの商談用デモ画面"
+  title: "個人タクシー売上・経費管理デモ",
+  description: "個人タクシー事業者向けに、営業CSVから日報、決済集計、カレンダー、経費管理まで確認する商談用デモ画面"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

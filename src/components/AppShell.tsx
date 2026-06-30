@@ -32,8 +32,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-slate-950 text-white lg:block">
         <div className="border-b border-white/10 px-5 py-5">
-          <p className="text-sm text-slate-300">タクシー業務管理</p>
-          <h1 className="mt-1 text-xl font-bold tracking-normal">営業管理デモ</h1>
+          <p className="text-sm text-slate-300">個人タクシー向け</p>
+          <h1 className="mt-1 text-xl font-bold tracking-normal">売上・経費管理デモ</h1>
           <div className="mt-3">
             <DemoBadge />
           </div>
@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-muted">商談・ヒアリング用フロントデモ</p>
+              <p className="text-xs font-medium text-muted">個人タクシー事業者向けフロントデモ</p>
               <h2 className="text-xl font-bold text-ink">{current}</h2>
             </div>
             <div className="flex items-center gap-3">

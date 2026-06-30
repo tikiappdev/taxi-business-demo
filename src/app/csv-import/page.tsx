@@ -15,10 +15,10 @@ export default function CsvImportPage() {
   return (
     <>
       <DemoNotice title="CSV取込デモの前提">
-        LT27 CSVのF1営業管理、F2出庫、F3入庫、F4営業時系列、FA決済データを読み取り、日報と決済集計へ反映する想定を画面で示しています。現段階ではファイル保存、DB保存、本格解析は行いません。
+        個人タクシーの日々の営業CSVを取り込む想定です。LT27 CSVのF1営業管理、F2出庫、F3入庫、F4営業時系列、FA決済データをもとに日報・決済集計へ反映する流れを示しています。現段階では実ファイル保存、DB保存、本格解析は行いません。本実装ではCSVを保存し、日報、決済集計、月次確認、確定申告向け集計へ反映する想定です。
       </DemoNotice>
 
-      <Section title="CSVファイル選択" description="実ファイルは保存せず、ファイル名と取込プレビューのみ表示します。">
+      <Section title="CSVファイル選択" description="個人タクシーの営業CSVを選択した想定で、実ファイルは保存せず、ファイル名と取込プレビューのみ表示します。">
         <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
           <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center hover:border-slate-500">
             <FileUp className="mb-3 text-slate-500" size={32} />
@@ -63,19 +63,19 @@ export default function CsvImportPage() {
         <StatCard label="出庫/入庫時刻" value={`${todaySummary.departureTime} / ${todaySummary.arrivalTime}`} sub="F2/F3から検出" />
       </div>
 
-      <Section title="取込プレビュー" description="LT27 CSVの主要レコードを業務画面に変換する流れを、商談時に説明しやすい形で表示しています。">
+      <Section title="取込プレビュー" description="LT27 CSVの主要レコードを売上・経費管理へ変換する流れを、商談時に説明しやすい形で表示しています。">
         <div className="mb-4 grid gap-3 lg:grid-cols-3">
           <div className="rounded-md border border-line bg-white p-3 text-sm">
             <p className="font-bold text-ink">日報へ反映</p>
-            <p className="mt-1 leading-5 text-muted">F2/F3の出入庫時刻とF4の営業明細から、乗務員別の日報を生成する想定です。</p>
+            <p className="mt-1 leading-5 text-muted">F2/F3の出入庫時刻とF4の営業明細から、CSV上の乗務員コードに紐づく日報を生成する想定です。</p>
           </div>
           <div className="rounded-md border border-line bg-white p-3 text-sm">
             <p className="font-bold text-ink">決済集計へ反映</p>
             <p className="mt-1 leading-5 text-muted">FAの決済種別コードを現金、クレジット、交通系IC、iD、QUICPayなどへ分類します。</p>
           </div>
           <div className="rounded-md border border-line bg-white p-3 text-sm">
-            <p className="font-bold text-ink">管理画面へ反映</p>
-            <p className="mt-1 leading-5 text-muted">取込履歴、月間カレンダー、売上推移へつなげることで、未取込日や営業なし日を見える化します。</p>
+            <p className="font-bold text-ink">売上・経費管理へ反映</p>
+            <p className="mt-1 leading-5 text-muted">取込履歴、月間カレンダー、売上推移へつなげることで、その日の営業CSVが未取込かどうかを見える化します。</p>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">

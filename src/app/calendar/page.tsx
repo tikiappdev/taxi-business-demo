@@ -13,16 +13,16 @@ export default function CalendarPage() {
   return (
     <>
       <DemoNotice title="カレンダーデモの前提">
-        日別の売上、経費、利益、CSV未取込日を固定データで表示しています。本実装ではCSV取込履歴とDB保存データをもとに、月次確認や未取込チェックへ対応する想定です。
+        個人タクシーの月間売上、経費、利益、CSV未取込日を固定データで表示しています。本実装では営業CSV取込履歴とDB保存データをもとに、月次確認や確定申告準備、未取込チェックへ対応する想定です。
       </DemoNotice>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="今週合計" value={formatCurrency(weekSales)} sub="6/25 - 6/30" />
-        <StatCard label="今月合計" value={formatCurrency(monthSales)} sub={`経費 ${formatCurrency(monthExpense)}`} />
+        <StatCard label="今週合計" value={formatCurrency(weekSales)} sub="6/25 - 6/30 の営業確認" />
+        <StatCard label="今月合計" value={formatCurrency(monthSales)} sub={`経費 ${formatCurrency(monthExpense)} / 月次確認用`} />
         <StatCard label="前月比" value="+8.6%" sub="デモ用の固定比較値" />
       </div>
 
-      <Section title="月間カレンダー" description="日付セルをクリックすると、その日の日報画面へ遷移します。CSV未取込日、営業なし日も日報側で空状態を確認できます。">
+      <Section title="月間カレンダー" description="日付セルをクリックすると、その日の日報画面へ遷移します。その日の営業CSVがまだ取り込まれていない日、営業なし日も日報側で状態を確認できます。">
         <div className="grid grid-cols-7 border-l border-t border-line text-center text-xs font-bold text-muted">
           {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
             <div key={day} className="border-b border-r border-line bg-slate-50 px-2 py-2">{day}</div>
