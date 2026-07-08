@@ -17,6 +17,7 @@ import { DemoBadge } from "@/components/Badge";
 const navItems = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { href: "/csv-import", label: "CSV取込", icon: FileUp },
+  { href: "/card-import", label: "カード読込", icon: FileUp },
   { href: "/daily-report", label: "日報", icon: ClipboardList },
   { href: "/calendar", label: "カレンダー", icon: CalendarDays },
   { href: "/payments", label: "決済集計", icon: Banknote },

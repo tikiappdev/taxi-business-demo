@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
+import { CardImportDemoProvider } from "@/contexts/CardImportDemoContext";
 
 export const metadata: Metadata = {
   title: "個人タクシー売上・経費管理デモ",
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="ja">
       <body>
-        <AppShell>{children}</AppShell>
+        <CardImportDemoProvider>
+          <AppShell>{children}</AppShell>
+        </CardImportDemoProvider>
       </body>
     </html>
   );

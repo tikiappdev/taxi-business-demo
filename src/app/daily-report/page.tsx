@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Printer, Download } from "lucide-react";
 import { DemoNotice } from "@/components/DemoNotice";
 import { Section } from "@/components/Section";
+import { useCardImportDemo } from "@/contexts/CardImportDemoContext";
 import { dailyReports } from "@/lib/demoData";
 import { formatCurrency } from "@/lib/format";
 
@@ -14,6 +15,7 @@ function dummyOutput(label: string) {
 }
 
 function DailyReportContent() {
+  const { report: cardReport } = useCardImportDemo();
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedDate = searchParams.get("date") ?? "2026-06-30";
@@ -104,6 +106,67 @@ function DailyReportContent() {
       <DemoNotice title="日報デモの前提">
         日付選択またはカレンダーからの遷移で、日報デモデータが切り替わります。日々の売上確認、決済内訳確認、月次・確定申告向けの元データとして使う想定です。本実装では取込済みCSVとDB保存データから日報を自動生成します。
       </DemoNotice>
+
+      {cardReport ? (
+        <Section
+          title="カード読込データから作成した日報プレビュー"
+          description="メーターSDカードの生データから自動生成した想定の日報プレビューです。既存の日報デモとは別枠で表示し、既存データの上書きは行いません。"
+          action={<span className="rounded bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">カード読込由来</span>}
+        >
+          <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+            このデータはデモ用で、リロードすると消えます。DB保存、サーバー送信、既存日報への正式反映は行っていません。
+          </div>
+          <div className="grid gap-3 md:grid-cols-5">
+            <div className="rounded-lg border border-line bg-white p-4">
+              <p className="text-xs text-muted">営業日</p>
+              <p className="mt-2 text-lg font-bold text-ink">{cardReport.date}</p>
+            </div>
+            <div className="rounded-lg border border-line bg-white p-4">
+              <p className="text-xs text-muted">総営収</p>
+              <p className="mt-2 text-lg font-bold text-ink">{formatCurrency(cardReport.sales)}</p>
+            </div>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-xs text-emerald-700">現収</p>
+              <p className="mt-2 text-lg font-bold text-emerald-800">{formatCurrency(cardReport.cashTotal)}</p>
+            </div>
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+              <p className="text-xs text-sky-700">未収</p>
+              <p className="mt-2 text-lg font-bold text-sky-800">{formatCurrency(cardReport.uncollectedTotal)}</p>
+            </div>
+            <div className="rounded-lg border border-line bg-white p-4">
+              <p className="text-xs text-muted">営業回数</p>
+              <p className="mt-2 text-lg font-bold text-ink">{cardReport.tripCount}件</p>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto table-scroll">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-muted">
+                <tr>
+                  <th className="px-3 py-3">営業ID</th>
+                  <th className="px-3 py-3">乗車</th>
+                  <th className="px-3 py-3">降車</th>
+                  <th className="px-3 py-3">営業km</th>
+                  <th className="px-3 py-3">決済</th>
+                  <th className="px-3 py-3 text-right">金額</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {cardReport.trips.map((trip) => (
+                  <tr key={trip.id}>
+                    <td className="px-3 py-3 font-medium">{trip.id}</td>
+                    <td className="px-3 py-3">{trip.start}</td>
+                    <td className="px-3 py-3">{trip.end}</td>
+                    <td className="px-3 py-3">{trip.distance}</td>
+                    <td className="px-3 py-3">{trip.payment}</td>
+                    <td className="px-3 py-3 text-right font-semibold">{formatCurrency(trip.fare)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      ) : null}
 
       <section className="rounded-lg border border-slate-300 bg-white shadow-sm">
         <div className="border-b border-slate-300 px-6 py-5">

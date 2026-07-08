@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { DemoNotice } from "@/components/DemoNotice";
 import { Section } from "@/components/Section";
+import { useCardImportDemo } from "@/contexts/CardImportDemoContext";
 import { paymentAggregates, paymentDetails, type PaymentPeriod, type PaymentType, type ReconciliationStatus } from "@/lib/demoData";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
@@ -28,6 +29,7 @@ function reconciliationBadge(status: ReconciliationStatus) {
 }
 
 export default function PaymentsPage() {
+  const { report: cardReport } = useCardImportDemo();
   const [active, setActive] = useState<PaymentPeriod>("日次");
   const [selectedType, setSelectedType] = useState<PaymentType>("現金");
   const [statusFilter, setStatusFilter] = useState<DetailStatusFilter>("すべて");
@@ -61,6 +63,50 @@ export default function PaymentsPage() {
       <DemoNotice title="決済集計デモの前提">
         FA決済データを読み取った想定の固定集計です。キャッシュレス決済や現金売上を確認し、入金確認のために明細ごとに「突合済み」「差額あり」「未入金」を管理できる見せ方にしています。ステータスと備考の変更、絞り込みはデモ表示です。本実装では事業者ごとのDBに保存予定です。
       </DemoNotice>
+
+      {cardReport ? (
+        <Section
+          title="カード読込データから作成した決済集計"
+          description="メーターSDカードの決済情報をもとに自動集計した想定のプレビューです。既存の決済集計デモとは別枠で表示しています。"
+          action={<span className="rounded bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">カード読込由来</span>}
+        >
+          <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+            このデータはデモ用で、リロードすると消えます。DB保存、サーバー送信、既存決済集計への正式反映は行っていません。
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-lg border border-line bg-white p-4">
+              <p className="text-xs text-muted">営業日</p>
+              <p className="mt-2 text-lg font-bold text-ink">{cardReport.date}</p>
+            </div>
+            <div className="rounded-lg border border-line bg-white p-4">
+              <p className="text-xs text-muted">総営収</p>
+              <p className="mt-2 text-lg font-bold text-ink">{formatCurrency(cardReport.sales)}</p>
+            </div>
+            <div className="rounded-lg border border-line bg-white p-4">
+              <p className="text-xs text-muted">現収+未収</p>
+              <p className="mt-2 text-lg font-bold text-ink">{formatCurrency(cardReport.classifiedTotal)}</p>
+            </div>
+            <div className="rounded-lg border border-line bg-white p-4">
+              <p className="text-xs text-muted">総営収との差額</p>
+              <p className={`mt-2 text-lg font-bold ${cardReport.revenueBalance === 0 ? "text-emerald-700" : "text-amber-700"}`}>
+                {formatCurrency(cardReport.revenueBalance)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {cardReport.paymentTotals.map((item) => (
+              <div key={item.type} className="rounded-md border border-line bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold text-ink">{item.type}</p>
+                  <p className="text-xs text-muted">コード {item.code}</p>
+                </div>
+                <p className="mt-2 text-lg font-bold text-slate-800">{formatCurrency(item.amount)}</p>
+                <p className="text-xs text-muted">{item.count}件</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
 
       <Section
         title="決済集計"
