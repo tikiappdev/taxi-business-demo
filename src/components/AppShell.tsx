@@ -15,13 +15,13 @@ import {
 import { DemoBadge } from "@/components/Badge";
 
 const navItems = [
+  { href: "/card-import", label: "カード読込", icon: FileUp, badge: "最初に使う" },
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
-  { href: "/csv-import", label: "CSV取込", icon: FileUp },
-  { href: "/card-import", label: "カード読込", icon: FileUp },
   { href: "/daily-report", label: "日報", icon: ClipboardList },
-  { href: "/calendar", label: "カレンダー", icon: CalendarDays },
   { href: "/payments", label: "決済集計", icon: Banknote },
   { href: "/expenses", label: "経費管理", icon: Fuel },
+  { href: "/calendar", label: "カレンダー", icon: CalendarDays },
+  { href: "/csv-import", label: "CSV取込", icon: FileUp },
   { href: "/settings", label: "設定", icon: Settings }
 ];
 
@@ -48,11 +48,20 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition ${
-                  active ? "bg-white text-slate-950" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  active
+                    ? "bg-white text-slate-950"
+                    : item.badge
+                      ? "border border-emerald-400/40 bg-emerald-400/10 text-white hover:bg-emerald-400/20"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <Icon size={18} />
-                {item.label}
+                <span className="min-w-0 flex-1">{item.label}</span>
+                {item.badge ? (
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-emerald-100 text-emerald-700" : "bg-emerald-300/20 text-emerald-100"}`}>
+                    {item.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -80,10 +89,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className={`whitespace-nowrap rounded-md border px-3 py-2 text-sm ${
                   item.href === pathname
                     ? "border-slate-900 bg-slate-900 text-white"
+                    : item.badge
+                      ? "border-emerald-300 bg-emerald-50 font-bold text-emerald-800"
                     : "border-line bg-white text-slate-700"
                 }`}
               >
                 {item.label}
+                {item.badge ? <span className="ml-2 text-xs">最初</span> : null}
               </Link>
             ))}
           </nav>
