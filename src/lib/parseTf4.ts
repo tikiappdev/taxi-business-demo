@@ -33,6 +33,10 @@ export type Tf4SalesRecord = {
   uncollectedAmountCandidate: number | null;
   advanceAmountCandidate: number | null;
   advanceAmountRaw: string;
+  otherFareCandidate: number | null;
+  otherFareRaw: string;
+  appDispatchFeeCandidate: number | null;
+  appDispatchFeeRaw: string;
   startedAt: string | null;
   startedAtRaw: string;
   endedAt: string | null;
@@ -182,6 +186,20 @@ function decodeBcdAmount(bytes: Uint8Array | null, multiplier = 10) {
   return value === null ? null : value * multiplier;
 }
 
+function decodeHexAmount(bytes: Uint8Array | null) {
+  if (!bytes || bytes.length === 0) {
+    return null;
+  }
+
+  const blank = bytes.every((byte) => byte === 0xff);
+
+  if (blank) {
+    return null;
+  }
+
+  return Array.from(bytes).reduce((value, byte) => (value << 8) + byte, 0);
+}
+
 function sumNullableAmounts(amounts: Array<number | null>) {
   if (amounts.some((amount) => amount === null)) {
     return null;
@@ -241,12 +259,16 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
     const businessKmCumulative = businessKmBcd === null ? null : businessKmBcd / 10;
     const totalAmountBytes = readBytes(view, recordOffset + 0x001c, 3);
     const totalAmount = decodeBcdAmount(totalAmountBytes);
+    const tariffDFareBytes = readBytes(view, recordOffset + 0x0025, 2);
     const tollAmountBytes = readBytes(view, recordOffset + 0x003b, 2);
     const parkingAmountBytes = readBytes(view, recordOffset + 0x003d, 2);
     const otherAdvanceAmountBytes = readBytes(view, recordOffset + 0x003f, 2);
+    const f3FixedFareBytes = readBytes(view, recordOffset + 0x0045, 2);
     const tollAmount = decodeBcdAmount(tollAmountBytes);
     const parkingAmount = decodeBcdAmount(parkingAmountBytes);
     const otherAdvanceAmount = decodeBcdAmount(otherAdvanceAmountBytes);
+    const tariffDFare = decodeHexAmount(tariffDFareBytes);
+    const f3FixedFare = decodeHexAmount(f3FixedFareBytes);
     const advanceAmount = sumNullableAmounts([tollAmount, parkingAmount, otherAdvanceAmount]);
     const flag = recordOffset + 0x008f < view.byteLength ? view.getUint8(recordOffset + 0x008f) : null;
     const hasUncollected = flag === null ? null : (flag & 0x01) !== 0;
@@ -265,6 +287,7 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
     const uncollectedAmount = collectionAmount === null || hasUncollected === null ? null : hasUncollected ? collectionAmount : 0;
     const paymentFlagBytes = readBytes(view, recordOffset + 0x008f, 18);
     const pickupBytes = readBytes(view, recordOffset + 0x01dc, 3);
+    const appDispatchFeeCandidate = f3FixedFare === null ? null : f3FixedFare * 10;
 
     records.push({
       recordNumber: index + 1,
@@ -289,6 +312,16 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
         `高速 ${tollAmountBytes ? bytesToHex(tollAmountBytes) : "-"}`,
         `駐車 ${parkingAmountBytes ? bytesToHex(parkingAmountBytes) : "-"}`,
         `その他 ${otherAdvanceAmountBytes ? bytesToHex(otherAdvanceAmountBytes) : "-"}`
+      ].join(" / "),
+      otherFareCandidate: tariffDFare === null ? null : tariffDFare * 10,
+      otherFareRaw: [
+        `Dタリフ ${tariffDFareBytes ? bytesToHex(tariffDFareBytes) : "-"}`,
+        "仕様: 0x0025 HEX ×10円"
+      ].join(" / "),
+      appDispatchFeeCandidate,
+      appDispatchFeeRaw: [
+        `F3固定料金 ${f3FixedFareBytes ? bytesToHex(f3FixedFareBytes) : "-"}`,
+        "仕様: 0x0045 HEX ×10円"
       ].join(" / "),
       startedAt: start.value,
       startedAtRaw: start.raw,

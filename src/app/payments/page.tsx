@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { DemoNotice } from "@/components/DemoNotice";
 import { Section } from "@/components/Section";
-import { useCardImportDemo } from "@/contexts/CardImportDemoContext";
+import { buildFareBreakdownRows, useCardImportDemo } from "@/contexts/CardImportDemoContext";
 import { paymentAggregates, paymentDetails, type PaymentPeriod, type PaymentType, type ReconciliationStatus } from "@/lib/demoData";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
@@ -29,7 +29,7 @@ function reconciliationBadge(status: ReconciliationStatus) {
 }
 
 export default function PaymentsPage() {
-  const { report: cardReport } = useCardImportDemo();
+  const { report: cardReport, fareItemLabels } = useCardImportDemo();
   const [active, setActive] = useState<PaymentPeriod>("日次");
   const [selectedType, setSelectedType] = useState<PaymentType>("現金");
   const [statusFilter, setStatusFilter] = useState<DetailStatusFilter>("すべて");
@@ -57,6 +57,8 @@ export default function PaymentsPage() {
     if (statusFilter === "未入金・差額あり") return status === "未入金" || status === "差額あり";
     return status === statusFilter;
   });
+  const cardPaymentBreakdownTotal = cardReport?.paymentBreakdown.reduce((sum, item) => sum + item.amount, 0) ?? 0;
+  const cardFareBreakdownRows = cardReport ? buildFareBreakdownRows(fareItemLabels, cardReport.fareBreakdown) : [];
 
   return (
     <>
@@ -76,7 +78,8 @@ export default function PaymentsPage() {
           <div className="grid gap-3 md:grid-cols-4">
             <div className="rounded-lg border border-line bg-white p-4">
               <p className="text-xs text-muted">営業日</p>
-              <p className="mt-2 text-lg font-bold text-ink">{cardReport.date}</p>
+              <p className="mt-2 text-lg font-bold text-ink">{cardReport.serviceDateLabel}</p>
+              <p className="mt-1 text-xs text-muted">出庫 {cardReport.departureTime} / 入庫 {cardReport.arrivalTime}</p>
             </div>
             <div className="rounded-lg border border-line bg-white p-4">
               <p className="text-xs text-muted">総営収</p>
@@ -93,17 +96,48 @@ export default function PaymentsPage() {
               </p>
             </div>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {cardReport.paymentTotals.map((item) => (
-              <div key={item.type} className="rounded-md border border-line bg-slate-50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-bold text-ink">{item.type}</p>
-                  <p className="text-xs text-muted">コード {item.code}</p>
+          <div className="mt-4 rounded-lg border border-line bg-white p-4">
+            <p className="text-sm font-bold text-ink">料金内訳補足</p>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              決済種別別集計には加算せず、総営収に含まれる料金内訳として確認します。{fareItemLabels.appDispatchFee}はTF4のF3固定料金です。
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {cardFareBreakdownRows.map((item) => (
+                <div key={item.key} className={`rounded-md border p-3 ${item.key === "appDispatchFee" ? "border-indigo-200 bg-indigo-50" : "border-line bg-slate-50"}`}>
+                  <p className={`text-xs ${item.key === "appDispatchFee" ? "text-indigo-700" : "text-muted"}`}>{item.label}</p>
+                  <p className={`mt-1 font-bold ${item.key === "appDispatchFee" ? "text-indigo-800" : "text-ink"}`}>{formatCurrency(item.amount)}</p>
                 </div>
-                <p className="mt-2 text-lg font-bold text-slate-800">{formatCurrency(item.amount)}</p>
-                <p className="text-xs text-muted">{item.count}件</p>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-line bg-white p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-ink">カード読込由来の決済種別別集計</p>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  営業明細に紐づいた決済種別ごとの件数・金額です。TFA決済金額は照合用で、総営収には二重加算していません。
+                </p>
               </div>
-            ))}
+              <span className={`w-fit rounded px-3 py-2 text-xs font-bold ${cardPaymentBreakdownTotal === cardReport.sales ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                {cardPaymentBreakdownTotal === cardReport.sales ? "総営収と一致" : `差額 ${formatCurrency(cardReport.sales - cardPaymentBreakdownTotal)}`}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {cardReport.paymentBreakdown.map((item) => (
+                <div key={item.type} className="rounded-md border border-line bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-bold text-ink">{item.type}</p>
+                    <p className="text-xs text-muted">コード {item.code}</p>
+                  </div>
+                  <p className="mt-2 text-lg font-bold text-slate-800">{formatCurrency(item.amount)}</p>
+                  <p className="text-xs text-muted">{item.count}件</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-bold text-ink">決済種別別合計</span>
+              <span className="font-bold text-ink">{formatCurrency(cardPaymentBreakdownTotal)}</span>
+            </div>
           </div>
         </Section>
       ) : null}
