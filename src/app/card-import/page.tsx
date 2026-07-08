@@ -10,6 +10,7 @@ import { paymentCodes, type PaymentType } from "@/lib/demoData";
 import {
   CARD_FILE_ACCEPT,
   CARD_FILE_EXTENSIONS,
+  getFileExtension,
   type CardFileReadResult,
   readCardFileAsArrayBuffer
 } from "@/lib/cardFileReader";
@@ -85,6 +86,10 @@ type Summary = {
   advanceTotal: number;
   paymentTotals: Array<{ label: string; amount: number; count: number }>;
 };
+
+type SelectionMode = "file" | "folder" | null;
+
+const FOLDER_TARGET_EXTENSIONS = new Set([".TF2", ".TF3", ".TF4", ".TFA", ".SPY"]);
 
 function statusClass(status: CardFileReadResult["status"]) {
   if (status === "success") {
@@ -310,6 +315,8 @@ export default function CardImportPage() {
   const [spyAnalyses, setSpyAnalyses] = useState<SpyAnalysis[]>([]);
   const [isReading, setIsReading] = useState(false);
   const [notice, setNotice] = useState("SDカード内の生データファイルを選択すると、ブラウザ上でArrayBuffer読込を確認します。");
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>(null);
+  const [ignoredFolderFileCount, setIgnoredFolderFileCount] = useState(0);
   const [locations, setLocations] = useState<Record<string, LocationLookup>>({});
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeApiCallCount, setGeocodeApiCallCount] = useState(0);
@@ -317,6 +324,7 @@ export default function CardImportPage() {
 
   const successCount = useMemo(() => files.filter((file) => file.status === "success").length, [files]);
   const failedCount = useMemo(() => files.filter((file) => file.status !== "success").length, [files]);
+  const checkFileCount = failedCount + ignoredFolderFileCount;
   const totalSize = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
   const tfaPayments = useMemo(() => tfaAnalyses.flatMap((analysis) => analysis.result?.records ?? []), [tfaAnalyses]);
   const spyMasters = useMemo(() => spyAnalyses.flatMap((analysis) => analysis.result?.masters ?? []), [spyAnalyses]);
@@ -378,12 +386,21 @@ export default function CardImportPage() {
     setIsGeocoding(false);
   };
 
-  const handleFiles = async (selectedFiles: FileList | null) => {
+  const handleFiles = async (selectedFiles: FileList | null, mode: Exclude<SelectionMode, null>) => {
     if (!selectedFiles?.length) {
       return;
     }
 
+    const selectedFileArray = Array.from(selectedFiles);
+    const targetFiles =
+      mode === "folder"
+        ? selectedFileArray.filter((file) => FOLDER_TARGET_EXTENSIONS.has(getFileExtension(file.name)))
+        : selectedFileArray;
+    const ignoredCount = selectedFileArray.length - targetFiles.length;
+
     setIsReading(true);
+    setSelectionMode(mode);
+    setIgnoredFolderFileCount(ignoredCount);
     setTf4Analyses([]);
     setTfaAnalyses([]);
     setSpyAnalyses([]);
@@ -391,9 +408,13 @@ export default function CardImportPage() {
     setIsGeocoding(false);
     setGeocodeApiCallCount(0);
     locationCache.current.clear();
-    setNotice("選択ファイルを読み込んでいます。元ファイルの変更や保存は行いません。");
+    setNotice(
+      mode === "folder"
+        ? `フォルダ内の対象ファイルを読み込んでいます。対象外 ${ignoredCount}件は読み込みません。元ファイルの変更や保存は行いません。`
+        : "選択ファイルを読み込んでいます。元ファイルの変更や保存は行いません。"
+    );
 
-    const results = await Promise.all(Array.from(selectedFiles).map((file) => readCardFileAsArrayBuffer(file)));
+    const results = await Promise.all(targetFiles.map((file) => readCardFileAsArrayBuffer(file)));
     const tfaResults = results
       .filter((file) => file.extension === ".TFA" && file.status === "success" && file.buffer)
       .map((file) => {
@@ -454,11 +475,17 @@ export default function CardImportPage() {
 
     const readSuccessCount = results.filter((file) => file.status === "success").length;
     const readFailedCount = results.length - readSuccessCount;
-    setNotice(`${results.length}件を確認しました。読込成功 ${readSuccessCount}件 / 要確認 ${readFailedCount}件`);
+    setNotice(
+      mode === "folder"
+        ? `フォルダ選択で${selectedFileArray.length}件を確認しました。読込対象 ${results.length}件 / 読込成功 ${readSuccessCount}件 / 要確認 ${readFailedCount + ignoredCount}件`
+        : `ファイル選択で${results.length}件を確認しました。読込成功 ${readSuccessCount}件 / 要確認 ${readFailedCount}件`
+    );
   };
 
   const resetCardSelection = () => {
     setFiles([]);
+    setSelectionMode(null);
+    setIgnoredFolderFileCount(0);
     setTf4Analyses([]);
     setTfaAnalyses([]);
     setSpyAnalyses([]);
@@ -526,39 +553,60 @@ export default function CardImportPage() {
         description="デモの最初の操作です。.TF4 / .TFA / .SPY をまとめて選択すると、日報プレビューと集計サマリーへ進めます。"
       >
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <label className="flex min-h-72 cursor-pointer flex-col justify-center rounded-xl border-2 border-slate-900 bg-white p-5 shadow-sm transition hover:bg-slate-50 sm:p-7">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div className="rounded-xl border-2 border-slate-900 bg-white p-5 shadow-sm sm:p-7">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
               <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
                 <FileUp size={32} />
               </span>
               <div className="min-w-0">
                 <span className="text-2xl font-bold text-ink">メーターSDカードのデータを選択</span>
                 <span className="mt-3 block text-sm leading-6 text-muted">
-                  まずここから始めます。複数ファイル選択で .TF4 / .TFA / .SPY をまとめて指定してください。元ファイルは変更しません。
+                  まずここから始めます。PCではフォルダ選択、スマホではファイル選択を使ってください。元ファイルは変更しません。
                 </span>
-                <span className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-slate-900 px-5 py-3 text-base font-bold text-white sm:w-auto">
-                  ファイルを選択する
-                </span>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-lg bg-slate-900 px-5 py-4 text-white transition hover:bg-slate-700">
+                    <span className="text-base font-bold">フォルダを選択する</span>
+                    <span className="mt-1 text-xs font-bold text-slate-200">PC推奨 / フォルダ内の対象拡張子を抽出</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept={CARD_FILE_ACCEPT}
+                      className="sr-only"
+                      {...({ webkitdirectory: "", directory: "" } as { webkitdirectory: string; directory: string })}
+                      onChange={(event) => {
+                        void handleFiles(event.target.files, "folder");
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-lg border border-slate-300 bg-white px-5 py-4 text-slate-800 transition hover:bg-slate-50">
+                    <span className="text-base font-bold">ファイルを選択する</span>
+                    <span className="mt-1 text-xs font-bold text-muted">スマホ推奨 / 複数ファイル選択</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept={CARD_FILE_ACCEPT}
+                      className="sr-only"
+                      onChange={(event) => {
+                        void handleFiles(event.target.files, "file");
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
                 <span className="mt-3 block text-xs leading-5 text-muted">
-                  対象例: .TF4 / .TFA / .SPY / .TF3 / .TF2 など。DGP走行軌跡は地名取得の対象外です。
+                  対象例: .TF4 / .TFA / .SPY / .TF3 / .TF2 など。フォルダ選択時、DGPなど不要ファイルは読み込み対象外として扱います。スマホではフォルダ選択が動かない場合があります。
                 </span>
               </div>
             </div>
-            <input
-              type="file"
-              multiple
-              accept={CARD_FILE_ACCEPT}
-              className="sr-only"
-              onChange={(event) => {
-                void handleFiles(event.target.files);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
+          </div>
 
           <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
             <p className="text-sm font-bold text-ink">読込状態</p>
             <p className="mt-2 text-sm leading-6 text-muted">{notice}</p>
+            <p className="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-muted">
+              選択方法: {selectionMode === "folder" ? "フォルダ選択（PC推奨）" : selectionMode === "file" ? "ファイル選択（スマホ推奨）" : "未選択"}
+            </p>
             {files.length > 0 && successCount > 0 ? (
               <p className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700">
                 <CheckCircle2 className="mt-0.5 shrink-0" size={16} />
@@ -576,7 +624,7 @@ export default function CardImportPage() {
               </div>
               <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-muted">要確認</p>
-                <p className="mt-1 text-lg font-bold text-amber-700">{failedCount}件</p>
+                <p className="mt-1 text-lg font-bold text-amber-700">{checkFileCount}件</p>
               </div>
               <div className="rounded-md bg-slate-50 p-3">
                 <p className="text-xs text-muted">合計サイズ</p>
@@ -654,6 +702,9 @@ export default function CardImportPage() {
                     <p className="mt-1 text-xs text-muted">
                       拡張子 {file.extension} / サイズ {file.sizeLabel}
                     </p>
+                    {file.relativePath ? (
+                      <p className="mt-1 break-all font-mono text-xs text-slate-500">フォルダ内パス {file.relativePath}</p>
+                    ) : null}
                   </div>
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(file.status)}`}>
                     {statusLabel(file.status)}

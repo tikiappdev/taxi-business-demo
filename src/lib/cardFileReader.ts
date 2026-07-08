@@ -22,6 +22,7 @@ export type CardReadStatus = "success" | "unsupported" | "error";
 export type CardFileReadResult = {
   id: string;
   name: string;
+  relativePath?: string;
   extension: string;
   size: number;
   sizeLabel: string;
@@ -59,9 +60,11 @@ export function formatFileSize(size: number) {
 
 export async function readCardFileAsArrayBuffer(file: File): Promise<CardFileReadResult> {
   const extension = getFileExtension(file.name);
+  const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
   const baseResult = {
-    id: `${file.name}-${file.size}-${file.lastModified}`,
+    id: `${relativePath || file.name}-${file.size}-${file.lastModified}`,
     name: file.name,
+    relativePath: relativePath || undefined,
     extension: extension || "不明",
     size: file.size,
     sizeLabel: formatFileSize(file.size),
