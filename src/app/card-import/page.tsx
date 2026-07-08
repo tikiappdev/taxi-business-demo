@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileSearch, FileUp, ListChecks, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { DemoNotice } from "@/components/DemoNotice";
@@ -48,6 +48,8 @@ type DailyPreviewRow = {
   boarding: string | null;
   alighting: string | null;
   serviceDate: string | null;
+  boardingGps: Tf4ParseResult["records"][number]["boardingGps"];
+  alightingGps: Tf4ParseResult["records"][number]["alightingGps"];
   businessKm: number | null;
   totalAmount: number | null;
   tfaPaymentAmount: number | null;
@@ -63,6 +65,13 @@ type DailyPreviewRow = {
   advanceAmount: number | null;
   note: string;
   raw: string;
+};
+
+type LocationLookup = {
+  status: "loading" | "success" | "error";
+  label: string;
+  error?: string;
+  raw?: Record<string, unknown>;
 };
 
 type Summary = {
@@ -119,6 +128,66 @@ function formatNullableBoolean(value: boolean | null) {
   }
 
   return value ? "あり" : "なし";
+}
+
+function coordinateKey(point: DailyPreviewRow["boardingGps"]) {
+  if (point.lat === null || point.lon === null) {
+    return null;
+  }
+
+  return `${point.lat.toFixed(5)},${point.lon.toFixed(5)}`;
+}
+
+function formatCoordinate(point: DailyPreviewRow["boardingGps"]) {
+  if (point.lat === null || point.lon === null) {
+    return `raw 緯度 ${point.latRaw || "-"} / 経度 ${point.lonRaw || "-"}`;
+  }
+
+  return `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`;
+}
+
+function locationLabel(point: DailyPreviewRow["boardingGps"], lookup?: LocationLookup) {
+  if (point.lat === null || point.lon === null) {
+    return {
+      title: "地名取得不可",
+      detail: formatCoordinate(point)
+    };
+  }
+
+  if (!lookup || lookup.status === "loading") {
+    return {
+      title: lookup?.status === "loading" ? "取得中" : "未取得",
+      detail: formatCoordinate(point)
+    };
+  }
+
+  if (lookup.status === "success") {
+    return {
+      title: lookup.label,
+      detail: formatCoordinate(point)
+    };
+  }
+
+  return {
+    title: "地名取得不可",
+    detail: `${formatCoordinate(point)} / ${lookup.error ?? "取得失敗"}`
+  };
+}
+
+function formatLocationRaw(lookup?: LocationLookup) {
+  if (!lookup) {
+    return "API未取得";
+  }
+
+  if (lookup.status === "loading") {
+    return "API取得中";
+  }
+
+  if (lookup.status === "error") {
+    return `API取得失敗 ${lookup.error ?? "-"}`;
+  }
+
+  return `API表示 ${lookup.label} / raw ${JSON.stringify(lookup.raw ?? {})}`;
 }
 
 function matchPayment(
@@ -182,6 +251,8 @@ function buildDailyPreviewRows(
         boarding: record.boardingTimeCandidate,
         alighting: record.alightingTimeCandidate,
         serviceDate: record.startedAt?.slice(0, 10) ?? record.endedAt?.slice(0, 10) ?? null,
+        boardingGps: record.boardingGps,
+        alightingGps: record.alightingGps,
         businessKm: record.businessKmCandidate,
         totalAmount: record.totalAmount,
         tfaPaymentAmount,
@@ -239,6 +310,10 @@ export default function CardImportPage() {
   const [spyAnalyses, setSpyAnalyses] = useState<SpyAnalysis[]>([]);
   const [isReading, setIsReading] = useState(false);
   const [notice, setNotice] = useState("SDカード内の生データファイルを選択すると、ブラウザ上でArrayBuffer読込を確認します。");
+  const [locations, setLocations] = useState<Record<string, LocationLookup>>({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeApiCallCount, setGeocodeApiCallCount] = useState(0);
+  const locationCache = useRef(new Map<string, LocationLookup>());
 
   const successCount = useMemo(() => files.filter((file) => file.status === "success").length, [files]);
   const failedCount = useMemo(() => files.filter((file) => file.status !== "success").length, [files]);
@@ -247,7 +322,61 @@ export default function CardImportPage() {
   const spyMasters = useMemo(() => spyAnalyses.flatMap((analysis) => analysis.result?.masters ?? []), [spyAnalyses]);
   const dailyPreviewRows = useMemo(() => buildDailyPreviewRows(tf4Analyses, tfaPayments, spyMasters), [tf4Analyses, tfaPayments, spyMasters]);
   const summary = useMemo(() => buildSummary(dailyPreviewRows), [dailyPreviewRows]);
+  const geocodeReferenceKeys = useMemo(
+    () =>
+      dailyPreviewRows
+        .flatMap((row) => [coordinateKey(row.boardingGps), coordinateKey(row.alightingGps)])
+        .filter((key): key is string => Boolean(key)),
+    [dailyPreviewRows]
+  );
+  const uniqueGeocodeKeys = useMemo(() => Array.from(new Set(geocodeReferenceKeys)), [geocodeReferenceKeys]);
+  const geocodeCacheSavedCount = geocodeReferenceKeys.length - uniqueGeocodeKeys.length;
   const canApplyDemoData = dailyPreviewRows.length > 0;
+
+  const fetchBoardingAndAlightingLocations = async () => {
+    if (uniqueGeocodeKeys.length === 0 || isGeocoding) {
+      return;
+    }
+
+    setIsGeocoding(true);
+
+    // 地名取得の送信対象はTF4営業明細の乗車地GPS・降車地GPSだけに限定する。
+    // DGPなどの走行軌跡データやその他GPSデータはここでは参照しない。
+    const requests = uniqueGeocodeKeys.map(async (key) => {
+      if (locationCache.current.has(key)) {
+        setLocations((current) => ({ ...current, [key]: locationCache.current.get(key) as LocationLookup }));
+        return;
+      }
+
+      const [lat, lon] = key.split(",");
+      const loading = { status: "loading", label: "取得中" } satisfies LocationLookup;
+      locationCache.current.set(key, loading);
+      setLocations((current) => ({ ...current, [key]: loading }));
+      setGeocodeApiCallCount((count) => count + 1);
+
+      const result = await fetch(`/api/reverse-geocode?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
+        .then(async (response) => {
+          const data = (await response.json()) as { ok?: boolean; name?: string; error?: string; raw?: LocationLookup["raw"] };
+
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error ?? "地名取得に失敗しました。");
+          }
+
+          return { status: "success", label: data.name || "地名取得不可", raw: data.raw } satisfies LocationLookup;
+        })
+        .catch((error) => ({
+          status: "error",
+          label: "地名取得不可",
+          error: error instanceof Error ? error.message : "地名取得に失敗しました。"
+        }) satisfies LocationLookup);
+
+      locationCache.current.set(key, result);
+      setLocations((current) => ({ ...current, [key]: result }));
+    });
+
+    await Promise.all(requests);
+    setIsGeocoding(false);
+  };
 
   const handleFiles = async (selectedFiles: FileList | null) => {
     if (!selectedFiles?.length) {
@@ -258,6 +387,10 @@ export default function CardImportPage() {
     setTf4Analyses([]);
     setTfaAnalyses([]);
     setSpyAnalyses([]);
+    setLocations({});
+    setIsGeocoding(false);
+    setGeocodeApiCallCount(0);
+    locationCache.current.clear();
     setNotice("選択ファイルを読み込んでいます。元ファイルの変更や保存は行いません。");
 
     const results = await Promise.all(Array.from(selectedFiles).map((file) => readCardFileAsArrayBuffer(file)));
@@ -329,6 +462,10 @@ export default function CardImportPage() {
     setTf4Analyses([]);
     setTfaAnalyses([]);
     setSpyAnalyses([]);
+    setLocations({});
+    setIsGeocoding(false);
+    setGeocodeApiCallCount(0);
+    locationCache.current.clear();
     clearReport();
     setNotice("SDカード内の生データファイルを選択すると、ブラウザ上でArrayBuffer読込を確認します。");
   };
@@ -554,13 +691,35 @@ export default function CardImportPage() {
           </div>
         ) : (
           <div className="space-y-3">
+            <div className="rounded-lg border border-line bg-white p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-ink">乗降地名取得</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    乗車地・降車地の座標のみを地名取得サービスへ送信します。DGP等の走行軌跡データは対象外です。
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  onClick={() => {
+                    void fetchBoardingAndAlightingLocations();
+                  }}
+                  disabled={uniqueGeocodeKeys.length === 0 || isGeocoding}
+                >
+                  {isGeocoding ? "取得中" : "乗降地名を取得"}
+                </button>
+              </div>
+            </div>
             <div className="overflow-x-auto table-scroll">
-              <table className="w-full min-w-[1320px] text-left text-sm">
+              <table className="w-full min-w-[1500px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs text-muted">
                   <tr>
                     <th className="px-3 py-3">No</th>
                     <th className="px-3 py-3">乗車</th>
+                    <th className="px-3 py-3">乗車地</th>
                     <th className="px-3 py-3">降車</th>
+                    <th className="px-3 py-3">降車地</th>
                     <th className="px-3 py-3 text-right">営業km</th>
                     <th className="px-3 py-3 text-right">合計金額</th>
                     <th className="px-3 py-3 text-right">TF4合計金額</th>
@@ -578,43 +737,68 @@ export default function CardImportPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {dailyPreviewRows.map((row) => (
-                    <tr key={row.id}>
-                      <td className="px-3 py-3 font-semibold">{row.no}</td>
-                      <td className="px-3 py-3">{row.boarding ?? <span className="text-muted">未解析</span>}</td>
-                      <td className="px-3 py-3">{row.alighting ?? <span className="text-muted">未解析</span>}</td>
-                      <td className="px-3 py-3 text-right font-semibold">{formatNullableKm(row.businessKm)}</td>
-                      <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.totalAmount)}</td>
-                      <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.totalAmount)}</td>
-                      <td className="px-3 py-3 text-right">{formatCurrency(row.tfaPaymentAmount)}</td>
-                      <td className="px-3 py-3 text-right">{formatCurrency(row.advanceAmount)}</td>
-                      <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.aggregationAmount)}</td>
-                      <td className="px-3 py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                          row.aggregationCategory === "現収"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : row.aggregationCategory === "未収"
-                              ? "bg-sky-50 text-sky-700"
-                              : "bg-amber-50 text-amber-700"
-                        }`}>
-                          {row.aggregationCategory}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right font-semibold text-emerald-700">{formatCurrency(row.cashAmount)}</td>
-                      <td className="px-3 py-3 text-right font-semibold text-sky-700">{formatCurrency(row.uncollectedAmount)}</td>
-                      <td className="px-3 py-3 font-semibold">{row.paymentLabel}</td>
-                      <td className="px-3 py-3">{formatNullableBoolean(row.hasPickup)}</td>
-                      <td className="px-3 py-3">{formatNullableBoolean(row.hasAdvance)}</td>
-                      <td className="px-3 py-3 text-xs text-slate-600">{row.aggregationMemo}</td>
-                      <td className="px-3 py-3 text-xs text-slate-600">{row.note}</td>
-                    </tr>
-                  ))}
+                  {dailyPreviewRows.map((row) => {
+                    const boardingLocation = locationLabel(row.boardingGps, coordinateKey(row.boardingGps) ? locations[coordinateKey(row.boardingGps) as string] : undefined);
+                    const alightingLocation = locationLabel(row.alightingGps, coordinateKey(row.alightingGps) ? locations[coordinateKey(row.alightingGps) as string] : undefined);
+
+                    return (
+                      <tr key={row.id}>
+                        <td className="px-3 py-3 font-semibold">{row.no}</td>
+                        <td className="px-3 py-3">{row.boarding ?? <span className="text-muted">未解析</span>}</td>
+                        <td className="px-3 py-3">
+                          <p className="font-semibold text-ink">{boardingLocation.title}</p>
+                          <p className="mt-1 font-mono text-xs text-muted">{boardingLocation.detail}</p>
+                        </td>
+                        <td className="px-3 py-3">{row.alighting ?? <span className="text-muted">未解析</span>}</td>
+                        <td className="px-3 py-3">
+                          <p className="font-semibold text-ink">{alightingLocation.title}</p>
+                          <p className="mt-1 font-mono text-xs text-muted">{alightingLocation.detail}</p>
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold">{formatNullableKm(row.businessKm)}</td>
+                        <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.totalAmount)}</td>
+                        <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.totalAmount)}</td>
+                        <td className="px-3 py-3 text-right">{formatCurrency(row.tfaPaymentAmount)}</td>
+                        <td className="px-3 py-3 text-right">{formatCurrency(row.advanceAmount)}</td>
+                        <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.aggregationAmount)}</td>
+                        <td className="px-3 py-3">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                            row.aggregationCategory === "現収"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : row.aggregationCategory === "未収"
+                                ? "bg-sky-50 text-sky-700"
+                                : "bg-amber-50 text-amber-700"
+                          }`}>
+                            {row.aggregationCategory}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold text-emerald-700">{formatCurrency(row.cashAmount)}</td>
+                        <td className="px-3 py-3 text-right font-semibold text-sky-700">{formatCurrency(row.uncollectedAmount)}</td>
+                        <td className="px-3 py-3 font-semibold">{row.paymentLabel}</td>
+                        <td className="px-3 py-3">{formatNullableBoolean(row.hasPickup)}</td>
+                        <td className="px-3 py-3">{formatNullableBoolean(row.hasAdvance)}</td>
+                        <td className="px-3 py-3 text-xs text-slate-600">{row.aggregationMemo}</td>
+                        <td className="px-3 py-3 text-xs text-slate-600">{row.note}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <p className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-muted">
-              総営収はTF4合計金額の合計、現収/未収は決済種別候補に応じてTF4合計金額を分類しています。TFA決済金額候補は照合用の別列で、総営収へ二重加算しません。
+              総営収はTF4合計金額の合計、現収/未収は決済種別候補に応じてTF4合計金額を分類しています。乗車地・降車地はTF4のGPS座標を自前API Route経由でNominatim/OpenStreetMapに問い合わせたデモ表示です。
             </p>
+            <div className="rounded-md border border-line bg-white px-3 py-3 text-xs text-muted">
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                <span className="font-bold text-ink">地名取得デバッグ</span>
+                <span>API呼び出し回数 {geocodeApiCallCount}回</span>
+                <span>乗降地座標数 {geocodeReferenceKeys.length}件</span>
+                <span>ユニーク座標 {uniqueGeocodeKeys.length}件</span>
+                <span>同一座標キャッシュ削減 {geocodeCacheSavedCount}回</span>
+              </div>
+              <p className="mt-2 leading-5">
+                地名取得はボタン押下時のみ実行します。送信対象はTF4営業明細の乗車地GPS・降車地GPSだけで、DGP等の走行軌跡やその他GPSデータは送信しません。
+              </p>
+            </div>
             <div className="rounded-lg border border-line bg-white p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -814,6 +998,10 @@ export default function CardImportPage() {
                           <tbody className="divide-y divide-line">
                             {analysis.result.records.map((record) => {
                               const paymentMatch = matchPayment(record, tfaPayments, spyMasters);
+                              const boardingKey = coordinateKey(record.boardingGps);
+                              const alightingKey = coordinateKey(record.alightingGps);
+                              const boardingLookup = boardingKey ? locations[boardingKey] : undefined;
+                              const alightingLookup = alightingKey ? locations[alightingKey] : undefined;
 
                               return (
                                 <tr key={`${analysis.fileName}-${record.recordNumber}`}>
@@ -829,7 +1017,7 @@ export default function CardImportPage() {
                                   <td className="px-3 py-3">{formatNullableBoolean(record.hasAdvance)}</td>
                                   <td className="px-3 py-3 font-mono text-xs text-slate-600">{paymentMatch.raw}</td>
                                   <td className="px-3 py-3 font-mono text-xs text-slate-600">
-                                    営業番号 {record.salesNumber ?? "-"} ({record.salesNumberRaw || "-"}) / 乗車raw {record.boardingTimeRaw || "-"} / 降車raw {record.alightingTimeRaw || "-"} / 営業km累計 {record.businessKmCumulative ?? "-"} ({record.businessKmRaw || "-"}) / 金額raw {record.totalAmountRaw || "-"} / 現収・未収判定 {record.flagRaw ?? "-"} / 立替raw {record.advanceAmountRaw} / TF4決済raw {record.paymentLinkRaw}
+                                    営業番号 {record.salesNumber ?? "-"} ({record.salesNumberRaw || "-"}) / 乗車raw {record.boardingTimeRaw || "-"} / 降車raw {record.alightingTimeRaw || "-"} / 乗車GPS {formatCoordinate(record.boardingGps)} (緯度raw {record.boardingGps.latRaw || "-"} / 経度raw {record.boardingGps.lonRaw || "-"} / status {record.boardingGps.statusRaw || "-"}) / 乗車地API {formatLocationRaw(boardingLookup)} / 降車GPS {formatCoordinate(record.alightingGps)} (緯度raw {record.alightingGps.latRaw || "-"} / 経度raw {record.alightingGps.lonRaw || "-"} / status {record.alightingGps.statusRaw || "-"}) / 降車地API {formatLocationRaw(alightingLookup)} / 営業km累計 {record.businessKmCumulative ?? "-"} ({record.businessKmRaw || "-"}) / 金額raw {record.totalAmountRaw || "-"} / 現収・未収判定 {record.flagRaw ?? "-"} / 立替raw {record.advanceAmountRaw} / TF4決済raw {record.paymentLinkRaw}
                                   </td>
                                 </tr>
                               );

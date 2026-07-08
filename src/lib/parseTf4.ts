@@ -3,6 +3,16 @@ const TF4_HEADER_CANDIDATE_SIZE = 16;
 
 type NullableBoolean = boolean | null;
 
+export type Tf4GpsPoint = {
+  lat: number | null;
+  lon: number | null;
+  latRaw: string;
+  lonRaw: string;
+  statusRaw: string;
+  time: string | null;
+  timeRaw: string;
+};
+
 export type Tf4SalesRecord = {
   recordNumber: number;
   recordOffset: number;
@@ -12,6 +22,8 @@ export type Tf4SalesRecord = {
   boardingTimeRaw: string;
   alightingTimeCandidate: string | null;
   alightingTimeRaw: string;
+  boardingGps: Tf4GpsPoint;
+  alightingGps: Tf4GpsPoint;
   businessKmCandidate: number | null;
   businessKmRaw: string;
   businessKmCumulative: number | null;
@@ -117,6 +129,46 @@ function parseBcdDateTime(bytes: Uint8Array | null) {
   };
 }
 
+function decodeGpsCoordinate(bytes: Uint8Array | null, max: number) {
+  const raw = bytes ? bytesToHex(bytes) : "";
+
+  if (!bytes || bytes.length !== 4) {
+    return { value: null, raw };
+  }
+
+  const blank = bytes.every((byte) => byte === 0x00) || bytes.every((byte) => byte === 0xff);
+
+  if (blank) {
+    return { value: null, raw };
+  }
+
+  const scaled = ((bytes[0] << 24) >>> 0) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3];
+  const value = scaled / 60000;
+
+  if (value <= 0 || value > max) {
+    return { value: null, raw };
+  }
+
+  return { value: Math.round(value * 1000000) / 1000000, raw };
+}
+
+function parseGpsPoint(view: DataView, recordOffset: number, latOffset: number, lonOffset: number, statusOffset: number, timeOffset: number): Tf4GpsPoint {
+  const lat = decodeGpsCoordinate(readBytes(view, recordOffset + latOffset, 4), 90);
+  const lon = decodeGpsCoordinate(readBytes(view, recordOffset + lonOffset, 4), 180);
+  const statusBytes = readBytes(view, recordOffset + statusOffset, 1);
+  const time = parseBcdDateTime(readBytes(view, recordOffset + timeOffset, 6));
+
+  return {
+    lat: lat.value,
+    lon: lon.value,
+    latRaw: lat.raw,
+    lonRaw: lon.raw,
+    statusRaw: statusBytes ? bytesToHex(statusBytes) : "",
+    time: time.value,
+    timeRaw: time.raw
+  };
+}
+
 function toTime(value: string | null) {
   if (!value) {
     return null;
@@ -181,6 +233,8 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
     const start = parseBcdDateTime(readBytes(view, recordOffset + 0x0010, 6));
     const end = parseBcdDateTime(readBytes(view, recordOffset + 0x0016, 6));
     const actualStart = parseBcdDateTime(readBytes(view, recordOffset + 0x0138, 6));
+    const boardingGps = parseGpsPoint(view, recordOffset, 0x00f1, 0x00f5, 0x00fa, 0x00fb);
+    const alightingGps = parseGpsPoint(view, recordOffset, 0x0101, 0x0105, 0x010a, 0x010b);
     const salesNumberBytes = readBytes(view, recordOffset + 0x004a, 2);
     const businessKmBytes = readBytes(view, recordOffset + 0x004e, 2);
     const businessKmBcd = decodeBcd(businessKmBytes);
@@ -221,6 +275,8 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
       boardingTimeRaw: actualStart.value ? actualStart.raw : start.raw,
       alightingTimeCandidate: toTime(end.value),
       alightingTimeRaw: end.raw,
+      boardingGps,
+      alightingGps,
       businessKmCandidate,
       businessKmRaw: businessKmBytes ? bytesToHex(businessKmBytes) : "",
       businessKmCumulative,
