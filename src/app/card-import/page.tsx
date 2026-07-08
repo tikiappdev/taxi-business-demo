@@ -521,49 +521,26 @@ export default function CardImportPage() {
         タクシーメーターSDカード内の生データを、スマホブラウザから選択して読込確認するための検証画面です。この段階では本番DB保存、サーバー送信、元ファイルの変更は行いません。本実装では読込済みファイルを保存し、営業CSV、日報、決済集計、月次確認へ連携する想定です。
       </DemoNotice>
 
-      <Section title="カード読込の流れ" description="組合・代理店向けデモでは、SDカードの生データから日報イメージまでをこの流れで説明できます。">
-        <div className="grid gap-3 md:grid-cols-3">
-          {[
-            { icon: FileUp, title: "1. SDカードのファイルを選択", body: ".TF4 / .TFA / .SPY などの対象ファイルを複数選択します。" },
-            { icon: FileSearch, title: "2. メーター生データを自動解析", body: "ブラウザ上でArrayBufferとして読み込み、営業明細と決済候補を解析します。" },
-            { icon: ListChecks, title: "3. 日報プレビューを確認", body: "総営収、現収、未収、決済種別、差額を日報風に確認します。" }
-          ].map((step) => {
-            const Icon = step.icon;
-
-            return (
-              <div key={step.title} className="rounded-lg border border-line bg-white p-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-700">
-                    <Icon size={20} />
-                  </span>
-                  <div>
-                    <p className="text-sm font-bold text-ink">{step.title}</p>
-                    <p className="mt-1 text-sm leading-6 text-muted">{step.body}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Section>
-
       <Section
-        title="SDカード生データ読込"
-        description="複数ファイルをまとめて選択し、ファイル名、拡張子、サイズ、ArrayBuffer読込結果を画面上で確認します。"
+        title="まずメーターSDカードのファイルを読み込む"
+        description="デモの最初の操作です。.TF4 / .TFA / .SPY をまとめて選択すると、日報プレビューと集計サマリーへ進めます。"
       >
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <label className="flex min-h-52 cursor-pointer flex-col justify-center rounded-lg border border-line bg-white p-5 shadow-sm hover:border-slate-400">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-                <FileUp size={28} />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <label className="flex min-h-72 cursor-pointer flex-col justify-center rounded-xl border-2 border-slate-900 bg-white p-5 shadow-sm transition hover:bg-slate-50 sm:p-7">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
+                <FileUp size={32} />
               </span>
-              <div>
-                <span className="text-lg font-bold text-ink">SDカード内ファイルを選択</span>
-                <span className="mt-2 block text-sm leading-6 text-muted">
-                  .TF4 / .TFA / .SPY を含めて選択すると、日報プレビューと集計サマリーを確認できます。元ファイルは変更しません。
+              <div className="min-w-0">
+                <span className="text-2xl font-bold text-ink">メーターSDカードのデータを選択</span>
+                <span className="mt-3 block text-sm leading-6 text-muted">
+                  まずここから始めます。複数ファイル選択で .TF4 / .TFA / .SPY をまとめて指定してください。元ファイルは変更しません。
                 </span>
-                <span className="mt-3 inline-flex rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
-                  複数ファイルを選択
+                <span className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-slate-900 px-5 py-3 text-base font-bold text-white sm:w-auto">
+                  ファイルを選択する
+                </span>
+                <span className="mt-3 block text-xs leading-5 text-muted">
+                  対象例: .TF4 / .TFA / .SPY / .TF3 / .TF2 など。DGP走行軌跡は地名取得の対象外です。
                 </span>
               </div>
             </div>
@@ -579,13 +556,13 @@ export default function CardImportPage() {
             />
           </label>
 
-          <div className="rounded-lg border border-line bg-white p-4">
+          <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
             <p className="text-sm font-bold text-ink">読込状態</p>
             <p className="mt-2 text-sm leading-6 text-muted">{notice}</p>
             {files.length > 0 && successCount > 0 ? (
-              <p className="mt-3 flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+              <p className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700">
                 <CheckCircle2 className="mt-0.5 shrink-0" size={16} />
-                <span>読込完了: 日報プレビューと集計サマリーを確認できます。</span>
+                <span>読込完了: {successCount}件を読み込みました。下の日報プレビューと集計サマリーを確認できます。</span>
               </p>
             ) : null}
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -608,13 +585,39 @@ export default function CardImportPage() {
             </div>
             <button
               type="button"
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
               onClick={resetCardSelection}
             >
               <RotateCcw size={16} />
               選択をクリア
             </button>
           </div>
+        </div>
+      </Section>
+
+      <Section title="カード読込の流れ" description="ファイルを選択した後、解析結果を日報・決済集計のデモ確認へつなげます。">
+        <div className="grid gap-3 md:grid-cols-3">
+          {[
+            { icon: FileUp, title: "1. SDカードのファイルを選択", body: ".TF4 / .TFA / .SPY などの対象ファイルを複数選択します。" },
+            { icon: FileSearch, title: "2. メーター生データを自動解析", body: "ブラウザ上でArrayBufferとして読み込み、営業明細と決済候補を解析します。" },
+            { icon: ListChecks, title: "3. 日報プレビューを確認", body: "総営収、現収、未収、決済種別、差額を日報風に確認します。" }
+          ].map((step) => {
+            const Icon = step.icon;
+
+            return (
+              <div key={step.title} className="rounded-lg border border-line bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-700">
+                    <Icon size={20} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-ink">{step.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted">{step.body}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Section>
 
