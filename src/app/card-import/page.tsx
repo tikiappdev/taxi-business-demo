@@ -6,12 +6,14 @@ import Link from "next/link";
 import { DemoNotice } from "@/components/DemoNotice";
 import { Section } from "@/components/Section";
 import {
-  buildFareBreakdownRows,
+  buildFareItems,
   mapCardPaymentBreakdownType,
   mapCardPaymentType,
   useCardImportDemo,
   type CardPaymentBreakdownItem,
-  type FareBreakdown
+  type FareBreakdown,
+  type FareItem,
+  type FareItemSettings
 } from "@/contexts/CardImportDemoContext";
 import { paymentCodes, type PaymentSummaryItem, type PaymentType } from "@/lib/demoData";
 import {
@@ -85,10 +87,17 @@ type DailyPreviewRow = {
   hasPickup: boolean | null;
   hasAdvance: boolean | null;
   advanceAmount: number | null;
+  pickupFare: number | null;
+  pickupFareRaw: string;
+  reservationFare: number | null;
+  reservationFareRaw: string;
   otherFare: number | null;
   otherFareRaw: string;
+  discountFare: number | null;
+  discountFareRaw: string;
   appDispatchFee: number | null;
   appDispatchFeeRaw: string;
+  fareBadges: string[];
   note: string;
   raw: string;
 };
@@ -120,6 +129,7 @@ type Summary = {
   advanceTotal: number;
   appDispatchFeeTotal: number;
   fareBreakdown: FareBreakdown;
+  fareItems: FareItem[];
   paymentBreakdown: CardPaymentBreakdownItem[];
 };
 
@@ -160,6 +170,11 @@ function formatNullableAmount(value: number | null) {
 
 function formatCurrency(value: number | null) {
   return value === null ? "-" : `${value.toLocaleString()}円`;
+}
+
+function formatFareItemAmount(item: FareItem) {
+  const signedAmount = item.kind === "subtract" ? -Math.abs(item.amount) : item.amount;
+  return formatCurrency(signedAmount);
 }
 
 function formatNullableKm(value: number | null) {
@@ -319,7 +334,10 @@ function buildDailyPreviewRows(
       const isCash = isCashPayment(paymentMatch);
       const tf4Amount = record.totalAmount;
       const tfaPaymentAmount = paymentMatch.payment?.amountCandidate ?? null;
+      const pickupFare = record.pickupFareCandidate ?? (record.hasPickup ? DEMO_TARIFF_UNIT_FARE : null);
+      const reservationFare = record.reservationFareCandidate;
       const otherFare = record.otherFareCandidate;
+      const discountFare = record.discountFareCandidate === null ? null : Math.abs(record.discountFareCandidate);
       const appDispatchFee = record.appDispatchFeeCandidate;
       const cash = tf4Amount === null || isUnknown ? null : isCash ? tf4Amount : 0;
       const uncollected = tf4Amount === null || isUnknown ? null : isCash ? 0 : tf4Amount;
@@ -333,6 +351,12 @@ function buildDailyPreviewRows(
       const note = isUnknown
         ? `未判定: ${paymentMatch.raw}`
         : `営業番号 ${record.salesNumber ?? "-"} / TFA決済金額候補 ${formatNullableAmount(tfaPaymentAmount)}円 / raw決済 ${paymentMatch.label}`;
+      const fareBadges = [
+        pickupFare ? `迎車 ${formatCurrency(pickupFare)}` : null,
+        reservationFare ? `予約 ${formatCurrency(reservationFare)}` : null,
+        discountFare ? `障割 ${formatCurrency(-discountFare)}` : null,
+        appDispatchFee ? `アプリ ${formatCurrency(appDispatchFee)}` : null
+      ].filter((value): value is string => Boolean(value));
 
       return {
         id: `${analysis.fileName}-${record.recordNumber}`,
@@ -355,10 +379,17 @@ function buildDailyPreviewRows(
         hasPickup: record.hasPickup,
         hasAdvance: record.hasAdvance,
         advanceAmount: record.advanceAmountCandidate,
+        pickupFare,
+        pickupFareRaw: `TF4 ${record.pickupFareRaw}`,
+        reservationFare,
+        reservationFareRaw: `TF4 ${record.reservationFareRaw}`,
         otherFare,
         otherFareRaw: `TF4 ${record.otherFareRaw}`,
+        discountFare,
+        discountFareRaw: `TF4 ${record.discountFareRaw}`,
         appDispatchFee,
         appDispatchFeeRaw: `TF4 ${record.appDispatchFeeRaw}`,
+        fareBadges,
         note,
         raw: paymentMatch.raw
       };
@@ -366,7 +397,7 @@ function buildDailyPreviewRows(
   });
 }
 
-function buildSummary(rows: DailyPreviewRow[]): Summary {
+function buildSummary(rows: DailyPreviewRow[], fareItemSettings: FareItemSettings): Summary {
   const paymentMap = new Map<string, CardPaymentBreakdownItem>();
 
   for (const row of rows) {
@@ -389,10 +420,21 @@ function buildSummary(rows: DailyPreviewRow[]): Summary {
   const classifiedTotal = cashTotal + uncollectedTotal;
   const pickupCount = rows.filter((row) => row.hasPickup).length;
   const basicFare = rows.length * DEMO_TARIFF_UNIT_FARE;
-  const pickupFare = pickupCount * DEMO_TARIFF_UNIT_FARE;
+  const pickupFare = rows.reduce((sum, row) => sum + (row.pickupFare ?? 0), 0);
+  const reservationFare = rows.reduce((sum, row) => sum + (row.reservationFare ?? 0), 0);
   const otherFare = rows.reduce((sum, row) => sum + (row.otherFare ?? 0), 0);
+  const discountFare = rows.reduce((sum, row) => sum + (row.discountFare ?? 0), 0);
   const appDispatchFeeTotal = rows.reduce((sum, row) => sum + (row.appDispatchFee ?? 0), 0);
-  const distanceFare = Math.max(0, totalRevenue - basicFare - pickupFare - otherFare);
+  const distanceFare = Math.max(0, totalRevenue - basicFare - pickupFare - reservationFare - otherFare + discountFare);
+  const fareBreakdown = {
+    basicFare,
+    distanceFare,
+    pickupFare,
+    reservationFare,
+    otherFare,
+    discountFare,
+    appDispatchFee: appDispatchFeeTotal
+  };
 
   return {
     tripCount: rows.length,
@@ -404,13 +446,8 @@ function buildSummary(rows: DailyPreviewRow[]): Summary {
     pickupCount,
     advanceTotal: rows.reduce((sum, row) => sum + (row.advanceAmount ?? 0), 0),
     appDispatchFeeTotal,
-    fareBreakdown: {
-      basicFare,
-      distanceFare,
-      pickupFare,
-      otherFare,
-      appDispatchFee: appDispatchFeeTotal
-    },
+    fareBreakdown,
+    fareItems: buildFareItems(fareItemSettings, fareBreakdown),
     paymentBreakdown: Array.from(paymentMap.values()).sort((a, b) => {
       const orderA = paymentBreakdownOrder.indexOf(a.type);
       const orderB = paymentBreakdownOrder.indexOf(b.type);
@@ -450,7 +487,7 @@ function buildDutySummary(tf4Analyses: Tf4Analysis[], tf2Analyses: Tf2Analysis[]
 }
 
 export default function CardImportPage() {
-  const { report: appliedReport, fareItemLabels, setReport, clearReport } = useCardImportDemo();
+  const { report: appliedReport, fareItemSettings, setReport, clearReport } = useCardImportDemo();
   const [files, setFiles] = useState<CardFileReadResult[]>([]);
   const [tf2Analyses, setTf2Analyses] = useState<Tf2Analysis[]>([]);
   const [tf3Analyses, setTf3Analyses] = useState<Tf3Analysis[]>([]);
@@ -473,10 +510,10 @@ export default function CardImportPage() {
   const tfaPayments = useMemo(() => tfaAnalyses.flatMap((analysis) => analysis.result?.records ?? []), [tfaAnalyses]);
   const spyMasters = useMemo(() => spyAnalyses.flatMap((analysis) => analysis.result?.masters ?? []), [spyAnalyses]);
   const dailyPreviewRows = useMemo(() => buildDailyPreviewRows(tf4Analyses, tfaPayments, spyMasters), [tf4Analyses, tfaPayments, spyMasters]);
-  const summary = useMemo(() => buildSummary(dailyPreviewRows), [dailyPreviewRows]);
+  const summary = useMemo(() => buildSummary(dailyPreviewRows, fareItemSettings), [dailyPreviewRows, fareItemSettings]);
   const dutySummary = useMemo(() => buildDutySummary(tf4Analyses, tf2Analyses, tf3Analyses, files), [tf4Analyses, tf2Analyses, tf3Analyses, files]);
   const paymentBreakdownTotal = useMemo(() => summary.paymentBreakdown.reduce((sum, item) => sum + item.amount, 0), [summary.paymentBreakdown]);
-  const fareBreakdownRows = useMemo(() => buildFareBreakdownRows(fareItemLabels, summary.fareBreakdown), [fareItemLabels, summary.fareBreakdown]);
+  const visibleFareItems = useMemo(() => summary.fareItems.filter((item) => item.visible), [summary.fareItems]);
   const geocodeReferenceKeys = useMemo(
     () =>
       dailyPreviewRows
@@ -714,6 +751,7 @@ export default function CardImportPage() {
       revenueBalance: summary.revenueBalance,
       appDispatchFeeTotal: summary.appDispatchFeeTotal,
       fareBreakdown: summary.fareBreakdown,
+      fareItems: summary.fareItems,
       tripCount: summary.tripCount,
       paymentTotals,
       paymentBreakdown: summary.paymentBreakdown,
@@ -730,6 +768,7 @@ export default function CardImportPage() {
         cashAmount: row.cashAmount,
         uncollectedAmount: row.uncollectedAmount,
         appDispatchFee: row.appDispatchFee,
+        fareBadges: row.fareBadges,
         note: row.note
       }))
     });
@@ -989,22 +1028,25 @@ export default function CardImportPage() {
                 <div>
                   <p className="text-sm font-bold text-ink">料金内訳</p>
                   <p className="mt-1 text-xs leading-5 text-muted">
-                    基本料金・後続料金・迎車料金・各種料金は総営収の内訳です。{fareItemLabels.appDispatchFee}は総営収に含まれる内訳として表示し、別加算はしていません。
+                    料金内訳は総営収に含まれる内訳です。割引項目はマイナス金額として表示し、現収・未収・決済種別別集計へ別加算していません。
                   </p>
                 </div>
                 <span className="w-fit rounded bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">名称は設定画面で変更可</span>
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                {fareBreakdownRows.map((item) => (
-                  <div key={item.key} className={`rounded-md border p-3 ${item.key === "appDispatchFee" ? "border-indigo-200 bg-indigo-50" : "border-line bg-slate-50"}`}>
-                    <p className={`text-xs ${item.key === "appDispatchFee" ? "text-indigo-700" : "text-muted"}`}>{item.label}</p>
-                    <p className={`mt-1 text-lg font-bold ${item.key === "appDispatchFee" ? "text-indigo-800" : "text-ink"}`}>{formatCurrency(item.amount)}</p>
-                    <p className="mt-1 text-xs text-muted">{item.note}</p>
+                {visibleFareItems.map((item) => (
+                  <div key={item.key} className={`rounded-md border p-3 ${item.kind === "subtract" ? "border-rose-200 bg-rose-50" : item.key === "appDispatchFee" ? "border-indigo-200 bg-indigo-50" : "border-line bg-slate-50"}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-xs ${item.kind === "subtract" ? "text-rose-700" : item.key === "appDispatchFee" ? "text-indigo-700" : "text-muted"}`}>{item.displayName}</p>
+                      <span className="rounded bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600">{item.kind === "subtract" ? "減算" : "加算"}</span>
+                    </div>
+                    <p className={`mt-1 text-lg font-bold ${item.kind === "subtract" ? "text-rose-800" : item.key === "appDispatchFee" ? "text-indigo-800" : "text-ink"}`}>{formatFareItemAmount(item)}</p>
+                    <p className="mt-1 text-xs text-muted">{item.source}</p>
                   </div>
                 ))}
               </div>
               <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-muted">
-                {fareItemLabels.appDispatchFee}はTF4のF3固定料金を参照しています。決済種別別集計や現収・未収へ追加加算しないため、総営収17,500円の照合値は維持されます。
+                料金項目の表示名、加算/減算、表示有無は設定画面で変更できます。設定はデモ用の一時状態で、DB保存やlocalStorage保存は行いません。
               </p>
             </div>
             <div className="rounded-lg border border-line bg-white p-4">
@@ -1070,7 +1112,8 @@ export default function CardImportPage() {
                     <th className="px-3 py-3 text-right">TF4合計金額</th>
                     <th className="px-3 py-3 text-right">TFA決済金額候補</th>
                     <th className="px-3 py-3 text-right">立替金額候補</th>
-                    <th className="px-3 py-3 text-right">{fareItemLabels.appDispatchFee}</th>
+                    <th className="px-3 py-3">加算/割引</th>
+                    <th className="px-3 py-3 text-right">{fareItemSettings.appDispatchFee.displayName}</th>
                     <th className="px-3 py-3 text-right">集計対象金額</th>
                     <th className="px-3 py-3">集計区分</th>
                     <th className="px-3 py-3 text-right">現収</th>
@@ -1105,6 +1148,13 @@ export default function CardImportPage() {
                         <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.totalAmount)}</td>
                         <td className="px-3 py-3 text-right">{formatCurrency(row.tfaPaymentAmount)}</td>
                         <td className="px-3 py-3 text-right">{formatCurrency(row.advanceAmount)}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex min-w-32 flex-wrap gap-1">
+                            {row.fareBadges.length > 0 ? row.fareBadges.map((badge) => (
+                              <span key={badge} className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{badge}</span>
+                            )) : <span className="text-xs text-muted">なし</span>}
+                          </div>
+                        </td>
                         <td className="px-3 py-3 text-right font-semibold text-indigo-700">{formatCurrency(row.appDispatchFee)}</td>
                         <td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.aggregationAmount)}</td>
                         <td className="px-3 py-3">
@@ -1254,7 +1304,7 @@ export default function CardImportPage() {
                 <p className="mt-2 text-xl font-bold text-ink">{formatCurrency(summary.advanceTotal)}</p>
               </div>
               <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
-                <p className="text-xs font-bold text-indigo-700">{fareItemLabels.appDispatchFee}</p>
+                <p className="text-xs font-bold text-indigo-700">{fareItemSettings.appDispatchFee.displayName}</p>
                 <p className="mt-2 text-xl font-bold text-indigo-800">{formatCurrency(summary.appDispatchFeeTotal)}</p>
                 <p className="mt-1 text-xs text-indigo-700">TF4 F3固定料金の合計。総営収に含まれる内訳として表示しています。</p>
               </div>
@@ -1433,7 +1483,7 @@ export default function CardImportPage() {
                                   <td className="px-3 py-3">{formatNullableBoolean(record.hasAdvance)}</td>
                                   <td className="px-3 py-3 font-mono text-xs text-slate-600">{paymentMatch.raw}</td>
                                   <td className="px-3 py-3 font-mono text-xs text-slate-600">
-                                    営業番号 {record.salesNumber ?? "-"} ({record.salesNumberRaw || "-"}) / 乗車raw {record.boardingTimeRaw || "-"} / 降車raw {record.alightingTimeRaw || "-"} / 乗車GPS {formatCoordinate(record.boardingGps)} (緯度raw {record.boardingGps.latRaw || "-"} / 経度raw {record.boardingGps.lonRaw || "-"} / status {record.boardingGps.statusRaw || "-"}) / 乗車地API {formatLocationRaw(boardingLookup)} / 降車GPS {formatCoordinate(record.alightingGps)} (緯度raw {record.alightingGps.latRaw || "-"} / 経度raw {record.alightingGps.lonRaw || "-"} / status {record.alightingGps.statusRaw || "-"}) / 降車地API {formatLocationRaw(alightingLookup)} / 営業km累計 {record.businessKmCumulative ?? "-"} ({record.businessKmRaw || "-"}) / 金額raw {record.totalAmountRaw || "-"} / 現収・未収判定 {record.flagRaw ?? "-"} / 立替raw {record.advanceAmountRaw} / 各種料金raw {record.otherFareRaw} / アプリ手配料raw {record.appDispatchFeeRaw} / TF4決済raw {record.paymentLinkRaw}
+                                    営業番号 {record.salesNumber ?? "-"} ({record.salesNumberRaw || "-"}) / 乗車raw {record.boardingTimeRaw || "-"} / 降車raw {record.alightingTimeRaw || "-"} / 乗車GPS {formatCoordinate(record.boardingGps)} (緯度raw {record.boardingGps.latRaw || "-"} / 経度raw {record.boardingGps.lonRaw || "-"} / status {record.boardingGps.statusRaw || "-"}) / 乗車地API {formatLocationRaw(boardingLookup)} / 降車GPS {formatCoordinate(record.alightingGps)} (緯度raw {record.alightingGps.latRaw || "-"} / 経度raw {record.alightingGps.lonRaw || "-"} / status {record.alightingGps.statusRaw || "-"}) / 降車地API {formatLocationRaw(alightingLookup)} / 営業km累計 {record.businessKmCumulative ?? "-"} ({record.businessKmRaw || "-"}) / 金額raw {record.totalAmountRaw || "-"} / 現収・未収判定 {record.flagRaw ?? "-"} / 立替raw {record.advanceAmountRaw} / 迎車料金raw {record.pickupFareRaw} / 予約料金raw {record.reservationFareRaw} / 各種料金raw {record.otherFareRaw} / 割引raw {record.discountFareRaw} / アプリ手配料raw {record.appDispatchFeeRaw} / TF4決済raw {record.paymentLinkRaw}
                                   </td>
                                 </tr>
                               );

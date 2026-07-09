@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { DemoNotice } from "@/components/DemoNotice";
 import { Section } from "@/components/Section";
-import { buildFareBreakdownRows, useCardImportDemo } from "@/contexts/CardImportDemoContext";
+import { buildFareItems, useCardImportDemo, type FareItem } from "@/contexts/CardImportDemoContext";
 import { paymentAggregates, paymentDetails, type PaymentPeriod, type PaymentType, type ReconciliationStatus } from "@/lib/demoData";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
@@ -12,6 +12,11 @@ const tabs: PaymentPeriod[] = ["日次", "週次", "月次", "期間指定"];
 const reconciliationOptions: ReconciliationStatus[] = ["突合済み", "差額あり", "未入金"];
 type DetailStatusFilter = "すべて" | ReconciliationStatus | "未入金・差額あり";
 const statusFilters: DetailStatusFilter[] = ["すべて", "突合済み", "差額あり", "未入金", "未入金・差額あり"];
+
+function formatFareItemAmount(item: FareItem) {
+  const signedAmount = item.kind === "subtract" ? -Math.abs(item.amount) : item.amount;
+  return formatCurrency(signedAmount);
+}
 
 function detailPeriods(active: PaymentPeriod): PaymentPeriod[] {
   if (active === "日次") return ["日次"];
@@ -29,7 +34,7 @@ function reconciliationBadge(status: ReconciliationStatus) {
 }
 
 export default function PaymentsPage() {
-  const { report: cardReport, fareItemLabels } = useCardImportDemo();
+  const { report: cardReport, fareItemSettings } = useCardImportDemo();
   const [active, setActive] = useState<PaymentPeriod>("日次");
   const [selectedType, setSelectedType] = useState<PaymentType>("現金");
   const [statusFilter, setStatusFilter] = useState<DetailStatusFilter>("すべて");
@@ -58,7 +63,7 @@ export default function PaymentsPage() {
     return status === statusFilter;
   });
   const cardPaymentBreakdownTotal = cardReport?.paymentBreakdown.reduce((sum, item) => sum + item.amount, 0) ?? 0;
-  const cardFareBreakdownRows = cardReport ? buildFareBreakdownRows(fareItemLabels, cardReport.fareBreakdown) : [];
+  const cardFareItems = cardReport ? buildFareItems(fareItemSettings, cardReport.fareBreakdown).filter((item) => item.visible) : [];
 
   return (
     <>
@@ -99,13 +104,13 @@ export default function PaymentsPage() {
           <div className="mt-4 rounded-lg border border-line bg-white p-4">
             <p className="text-sm font-bold text-ink">料金内訳補足</p>
             <p className="mt-1 text-xs leading-5 text-muted">
-              決済種別別集計には加算せず、総営収に含まれる料金内訳として確認します。{fareItemLabels.appDispatchFee}はTF4のF3固定料金です。
+              決済種別別集計には加算せず、総営収に含まれる料金内訳として確認します。設定画面の表示名・加算/減算・表示有無を反映します。
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              {cardFareBreakdownRows.map((item) => (
-                <div key={item.key} className={`rounded-md border p-3 ${item.key === "appDispatchFee" ? "border-indigo-200 bg-indigo-50" : "border-line bg-slate-50"}`}>
-                  <p className={`text-xs ${item.key === "appDispatchFee" ? "text-indigo-700" : "text-muted"}`}>{item.label}</p>
-                  <p className={`mt-1 font-bold ${item.key === "appDispatchFee" ? "text-indigo-800" : "text-ink"}`}>{formatCurrency(item.amount)}</p>
+              {cardFareItems.map((item) => (
+                <div key={item.key} className={`rounded-md border p-3 ${item.kind === "subtract" ? "border-rose-200 bg-rose-50" : item.key === "appDispatchFee" ? "border-indigo-200 bg-indigo-50" : "border-line bg-slate-50"}`}>
+                  <p className={`text-xs ${item.kind === "subtract" ? "text-rose-700" : item.key === "appDispatchFee" ? "text-indigo-700" : "text-muted"}`}>{item.displayName}</p>
+                  <p className={`mt-1 font-bold ${item.kind === "subtract" ? "text-rose-800" : item.key === "appDispatchFee" ? "text-indigo-800" : "text-ink"}`}>{formatFareItemAmount(item)}</p>
                 </div>
               ))}
             </div>

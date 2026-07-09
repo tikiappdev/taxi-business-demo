@@ -5,39 +5,78 @@ import type { PaymentSummaryItem, PaymentType, Trip } from "@/lib/demoData";
 
 export type CardPaymentBreakdownType = PaymentType | "未判定";
 
+export type FareItemKey =
+  | "basicFare"
+  | "distanceFare"
+  | "pickupFare"
+  | "reservationFare"
+  | "otherFare"
+  | "discountFare"
+  | "appDispatchFee";
+
+export type FareItemKind = "add" | "subtract";
+
+export type FareItemSetting = {
+  defaultName: string;
+  displayName: string;
+  kind: FareItemKind;
+  visible: boolean;
+};
+
 export type FareBreakdown = {
   basicFare: number;
   distanceFare: number;
   pickupFare: number;
+  reservationFare: number;
   otherFare: number;
+  discountFare: number;
   appDispatchFee: number;
 };
 
-export type FareItemLabels = Record<keyof FareBreakdown, string>;
+export type FareItemSettings = Record<FareItemKey, FareItemSetting>;
 
-export const defaultFareItemLabels: FareItemLabels = {
-  basicFare: "基本料金",
-  distanceFare: "後続料金",
-  pickupFare: "迎車料金",
-  otherFare: "各種料金",
-  appDispatchFee: "アプリ手配料"
+export const defaultFareItemSettings: FareItemSettings = {
+  basicFare: { defaultName: "基本料金", displayName: "基本料金", kind: "add", visible: true },
+  distanceFare: { defaultName: "後続料金", displayName: "後続料金", kind: "add", visible: true },
+  pickupFare: { defaultName: "迎車料金", displayName: "迎車料金", kind: "add", visible: true },
+  reservationFare: { defaultName: "予約料金", displayName: "予約料金", kind: "add", visible: true },
+  otherFare: { defaultName: "各種料金", displayName: "各種料金", kind: "add", visible: true },
+  discountFare: { defaultName: "各種割引", displayName: "各種割引", kind: "subtract", visible: true },
+  appDispatchFee: { defaultName: "アプリ手配料", displayName: "アプリ手配料", kind: "add", visible: true }
 };
 
-export type FareBreakdownRow = {
-  key: keyof FareBreakdown;
-  label: string;
+export type FareItem = {
+  key: FareItemKey;
+  defaultName: string;
+  displayName: string;
   amount: number;
-  note: string;
+  kind: FareItemKind;
+  visible: boolean;
+  source: string;
+  rawInfo: string;
 };
 
-export function buildFareBreakdownRows(labels: FareItemLabels, breakdown: FareBreakdown): FareBreakdownRow[] {
-  return [
-    { key: "basicFare", label: labels.basicFare, amount: breakdown.basicFare, note: "営業回数から算出" },
-    { key: "distanceFare", label: labels.distanceFare, amount: breakdown.distanceFare, note: "総営収から他内訳を差し引いて算出" },
-    { key: "pickupFare", label: labels.pickupFare, amount: breakdown.pickupFare, note: "迎車フラグから算出" },
-    { key: "otherFare", label: labels.otherFare, amount: breakdown.otherFare, note: "TF4 Dタリフ料金" },
-    { key: "appDispatchFee", label: labels.appDispatchFee, amount: breakdown.appDispatchFee, note: "TF4 F3固定料金" }
-  ];
+export function buildFareItems(settings: FareItemSettings, breakdown: FareBreakdown): FareItem[] {
+  const sources: Record<FareItemKey, { source: string; rawInfo: string }> = {
+    basicFare: { source: "営業回数またはTF4解析結果から算出", rawInfo: "営業回数 × 500円" },
+    distanceFare: { source: "総営収から他内訳を差し引いて算出", rawInfo: "総営収 - 加算項目 + 減算項目" },
+    pickupFare: { source: "TF4 迎車フラグ/迎車金額候補", rawInfo: "0x01DD または迎車フラグ" },
+    reservationFare: { source: "TF4 予約料金候補", rawInfo: "0x0027 HEX ×10円" },
+    otherFare: { source: "TF4 各種料金候補", rawInfo: "Dタリフ等" },
+    discountFare: { source: "TF4 割引候補", rawInfo: "0x0020 符号付き ×10円" },
+    appDispatchFee: { source: "TF4 F3固定料金", rawInfo: "0x0045 HEX ×10円" }
+  };
+
+  return (Object.keys(settings) as FareItemKey[]).map((key) => ({
+    key,
+    defaultName: settings[key].defaultName,
+    displayName: settings[key].displayName,
+    amount: breakdown[key],
+    kind: settings[key].kind,
+    visible: settings[key].visible,
+    source: sources[key].source,
+    rawInfo: sources[key].rawInfo
+  }));
 }
 
 export type CardPaymentBreakdownItem = {
@@ -52,6 +91,7 @@ export type CardImportDemoTrip = Trip & {
   cashAmount: number | null;
   uncollectedAmount: number | null;
   appDispatchFee: number | null;
+  fareBadges: string[];
   note: string;
 };
 
@@ -71,6 +111,7 @@ export type CardImportDemoReport = {
   revenueBalance: number;
   appDispatchFeeTotal: number;
   fareBreakdown: FareBreakdown;
+  fareItems: FareItem[];
   tripCount: number;
   paymentTotals: PaymentSummaryItem[];
   paymentBreakdown: CardPaymentBreakdownItem[];
@@ -79,10 +120,10 @@ export type CardImportDemoReport = {
 
 type CardImportDemoContextValue = {
   report: CardImportDemoReport | null;
-  fareItemLabels: FareItemLabels;
+  fareItemSettings: FareItemSettings;
   setReport: (report: CardImportDemoReport) => void;
-  setFareItemLabels: (labels: FareItemLabels) => void;
-  resetFareItemLabels: () => void;
+  setFareItemSettings: (settings: FareItemSettings) => void;
+  resetFareItemSettings: () => void;
   clearReport: () => void;
 };
 
@@ -90,18 +131,18 @@ const CardImportDemoContext = createContext<CardImportDemoContextValue | null>(n
 
 export function CardImportDemoProvider({ children }: { children: ReactNode }) {
   const [report, setReportState] = useState<CardImportDemoReport | null>(null);
-  const [fareItemLabels, setFareItemLabelsState] = useState<FareItemLabels>(defaultFareItemLabels);
+  const [fareItemSettings, setFareItemSettingsState] = useState<FareItemSettings>(defaultFareItemSettings);
 
   const value = useMemo<CardImportDemoContextValue>(
     () => ({
       report,
-      fareItemLabels,
+      fareItemSettings,
       setReport: setReportState,
-      setFareItemLabels: setFareItemLabelsState,
-      resetFareItemLabels: () => setFareItemLabelsState(defaultFareItemLabels),
+      setFareItemSettings: setFareItemSettingsState,
+      resetFareItemSettings: () => setFareItemSettingsState(defaultFareItemSettings),
       clearReport: () => setReportState(null)
     }),
-    [report, fareItemLabels]
+    [report, fareItemSettings]
   );
 
   return <CardImportDemoContext.Provider value={value}>{children}</CardImportDemoContext.Provider>;

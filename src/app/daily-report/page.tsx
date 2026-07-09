@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Printer, Download } from "lucide-react";
 import { DemoNotice } from "@/components/DemoNotice";
 import { Section } from "@/components/Section";
-import { buildFareBreakdownRows, useCardImportDemo } from "@/contexts/CardImportDemoContext";
+import { buildFareItems, useCardImportDemo, type FareItem } from "@/contexts/CardImportDemoContext";
 import { dailyReports } from "@/lib/demoData";
 import { formatCurrency } from "@/lib/format";
 
@@ -14,8 +14,13 @@ function dummyOutput(label: string) {
   alert(`${label}はデモ版のため実ファイルは作成しません。`);
 }
 
+function formatFareItemAmount(item: FareItem) {
+  const signedAmount = item.kind === "subtract" ? -Math.abs(item.amount) : item.amount;
+  return formatCurrency(signedAmount);
+}
+
 function DailyReportContent() {
-  const { report: cardReport, fareItemLabels } = useCardImportDemo();
+  const { report: cardReport, fareItemSettings } = useCardImportDemo();
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedDate = searchParams.get("date") ?? "2026-06-30";
@@ -101,7 +106,7 @@ function DailyReportContent() {
     ["CSV種別", "F1/F2/F3/F4/FA"]
   ];
   const cardPaymentBreakdownTotal = cardReport?.paymentBreakdown.reduce((sum, item) => sum + item.amount, 0) ?? 0;
-  const cardFareBreakdownRows = cardReport ? buildFareBreakdownRows(fareItemLabels, cardReport.fareBreakdown) : [];
+  const cardFareItems = cardReport ? buildFareItems(fareItemSettings, cardReport.fareBreakdown).filter((item) => item.visible) : [];
 
   return (
     <>
@@ -166,17 +171,20 @@ function DailyReportContent() {
                   <div>
                     <h4 className="text-base font-bold text-ink">料金内訳</h4>
                     <p className="mt-1 text-xs leading-5 text-muted">
-                      基本料金・後続料金・迎車料金・各種料金は総営収の内訳です。{fareItemLabels.appDispatchFee}はTF4のF3固定料金として表示し、現収・未収・決済集計へ別加算していません。
+                      料金内訳は総営収に含まれる内訳です。割引項目はマイナス金額で表示し、現収・未収・決済集計へ別加算していません。
                     </p>
                   </div>
                   <span className="w-fit rounded bg-white px-3 py-2 text-xs font-bold text-slate-700">カード読込由来</span>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                  {cardFareBreakdownRows.map((item) => (
-                    <div key={item.key} className={`rounded-md border p-3 ${item.key === "appDispatchFee" ? "border-indigo-200 bg-indigo-50" : "border-line bg-white"}`}>
-                      <p className={`text-xs ${item.key === "appDispatchFee" ? "text-indigo-700" : "text-muted"}`}>{item.label}</p>
-                      <p className={`mt-1 text-lg font-bold ${item.key === "appDispatchFee" ? "text-indigo-800" : "text-ink"}`}>{formatCurrency(item.amount)}</p>
-                      <p className="mt-1 text-xs text-muted">{item.note}</p>
+                  {cardFareItems.map((item) => (
+                    <div key={item.key} className={`rounded-md border p-3 ${item.kind === "subtract" ? "border-rose-200 bg-rose-50" : item.key === "appDispatchFee" ? "border-indigo-200 bg-indigo-50" : "border-line bg-white"}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={`text-xs ${item.kind === "subtract" ? "text-rose-700" : item.key === "appDispatchFee" ? "text-indigo-700" : "text-muted"}`}>{item.displayName}</p>
+                        <span className="rounded bg-white px-2 py-0.5 text-[11px] font-bold text-slate-600">{item.kind === "subtract" ? "減算" : "加算"}</span>
+                      </div>
+                      <p className={`mt-1 text-lg font-bold ${item.kind === "subtract" ? "text-rose-800" : item.key === "appDispatchFee" ? "text-indigo-800" : "text-ink"}`}>{formatFareItemAmount(item)}</p>
+                      <p className="mt-1 text-xs text-muted">{item.source}</p>
                     </div>
                   ))}
                 </div>
@@ -224,7 +232,8 @@ function DailyReportContent() {
                       <th className="px-3 py-3 text-right">合計金額</th>
                       <th className="px-3 py-3 text-right">現収</th>
                       <th className="px-3 py-3 text-right">未収</th>
-                      <th className="px-3 py-3 text-right">{fareItemLabels.appDispatchFee}</th>
+                      <th className="px-3 py-3">加算/割引</th>
+                      <th className="px-3 py-3 text-right">{fareItemSettings.appDispatchFee.displayName}</th>
                       <th className="px-3 py-3">決済種別</th>
                       <th className="px-3 py-3">備考</th>
                     </tr>
@@ -241,6 +250,13 @@ function DailyReportContent() {
                         <td className="px-3 py-3 text-right font-semibold">{formatCurrency(trip.fare)}</td>
                         <td className="px-3 py-3 text-right text-emerald-700">{trip.cashAmount === null ? "-" : formatCurrency(trip.cashAmount)}</td>
                         <td className="px-3 py-3 text-right text-sky-700">{trip.uncollectedAmount === null ? "-" : formatCurrency(trip.uncollectedAmount)}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex min-w-32 flex-wrap gap-1">
+                            {trip.fareBadges.length > 0 ? trip.fareBadges.map((badge) => (
+                              <span key={badge} className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{badge}</span>
+                            )) : <span className="text-xs text-muted">なし</span>}
+                          </div>
+                        </td>
                         <td className="px-3 py-3 text-right font-semibold text-indigo-700">{trip.appDispatchFee === null ? "-" : formatCurrency(trip.appDispatchFee)}</td>
                         <td className="px-3 py-3">{trip.payment}</td>
                         <td className="px-3 py-3 text-xs text-muted">{trip.note}</td>

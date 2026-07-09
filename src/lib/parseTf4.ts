@@ -33,8 +33,14 @@ export type Tf4SalesRecord = {
   uncollectedAmountCandidate: number | null;
   advanceAmountCandidate: number | null;
   advanceAmountRaw: string;
+  pickupFareCandidate: number | null;
+  pickupFareRaw: string;
+  reservationFareCandidate: number | null;
+  reservationFareRaw: string;
   otherFareCandidate: number | null;
   otherFareRaw: string;
+  discountFareCandidate: number | null;
+  discountFareRaw: string;
   appDispatchFeeCandidate: number | null;
   appDispatchFeeRaw: string;
   startedAt: string | null;
@@ -200,6 +206,29 @@ function decodeHexAmount(bytes: Uint8Array | null) {
   return Array.from(bytes).reduce((value, byte) => (value << 8) + byte, 0);
 }
 
+function decodeSignedByteAmount(byte: number | null, multiplier = 10) {
+  if (byte === null || byte === 0x00 || byte === 0xff || byte === 0xaa) {
+    return null;
+  }
+
+  const signed = byte > 0x7f ? byte - 0x100 : byte;
+  return signed * multiplier;
+}
+
+function decodeHexAmountWithBlank(bytes: Uint8Array | null) {
+  if (!bytes || bytes.length === 0) {
+    return null;
+  }
+
+  const blank = bytes.every((byte) => byte === 0xff) || bytes.every((byte) => byte === 0xaa);
+
+  if (blank) {
+    return null;
+  }
+
+  return Array.from(bytes).reduce((value, byte) => (value << 8) + byte, 0);
+}
+
 function sumNullableAmounts(amounts: Array<number | null>) {
   if (amounts.some((amount) => amount === null)) {
     return null;
@@ -259,6 +288,8 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
     const businessKmCumulative = businessKmBcd === null ? null : businessKmBcd / 10;
     const totalAmountBytes = readBytes(view, recordOffset + 0x001c, 3);
     const totalAmount = decodeBcdAmount(totalAmountBytes);
+    const discountFareByte = recordOffset + 0x0020 < view.byteLength ? view.getUint8(recordOffset + 0x0020) : null;
+    const reservationFareBytes = readBytes(view, recordOffset + 0x0027, 2);
     const tariffDFareBytes = readBytes(view, recordOffset + 0x0025, 2);
     const tollAmountBytes = readBytes(view, recordOffset + 0x003b, 2);
     const parkingAmountBytes = readBytes(view, recordOffset + 0x003d, 2);
@@ -267,6 +298,7 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
     const tollAmount = decodeBcdAmount(tollAmountBytes);
     const parkingAmount = decodeBcdAmount(parkingAmountBytes);
     const otherAdvanceAmount = decodeBcdAmount(otherAdvanceAmountBytes);
+    const reservationFare = decodeHexAmountWithBlank(reservationFareBytes);
     const tariffDFare = decodeHexAmount(tariffDFareBytes);
     const f3FixedFare = decodeHexAmount(f3FixedFareBytes);
     const advanceAmount = sumNullableAmounts([tollAmount, parkingAmount, otherAdvanceAmount]);
@@ -287,7 +319,13 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
     const uncollectedAmount = collectionAmount === null || hasUncollected === null ? null : hasUncollected ? collectionAmount : 0;
     const paymentFlagBytes = readBytes(view, recordOffset + 0x008f, 18);
     const pickupBytes = readBytes(view, recordOffset + 0x01dc, 3);
+    const pickupFareBytes = readBytes(view, recordOffset + 0x01dd, 2);
+    const pickupFare = decodeHexAmountWithBlank(pickupFareBytes);
     const appDispatchFeeCandidate = f3FixedFare === null ? null : f3FixedFare * 10;
+    const fallbackBusinessKmCandidate =
+      businessKmCandidate === null && totalAmount !== null
+        ? 0
+        : businessKmCandidate;
 
     records.push({
       recordNumber: index + 1,
@@ -300,7 +338,7 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
       alightingTimeRaw: end.raw,
       boardingGps,
       alightingGps,
-      businessKmCandidate,
+      businessKmCandidate: fallbackBusinessKmCandidate,
       businessKmRaw: businessKmBytes ? bytesToHex(businessKmBytes) : "",
       businessKmCumulative,
       totalAmount,
@@ -313,10 +351,25 @@ export function parseTf4(buffer: ArrayBuffer): Tf4ParseResult {
         `駐車 ${parkingAmountBytes ? bytesToHex(parkingAmountBytes) : "-"}`,
         `その他 ${otherAdvanceAmountBytes ? bytesToHex(otherAdvanceAmountBytes) : "-"}`
       ].join(" / "),
+      pickupFareCandidate: pickupFare === null ? null : pickupFare,
+      pickupFareRaw: [
+        `迎車金額 ${pickupFareBytes ? bytesToHex(pickupFareBytes) : "-"}`,
+        "仕様候補: 0x01DD HEX ×1円"
+      ].join(" / "),
+      reservationFareCandidate: reservationFare === null ? null : reservationFare * 10,
+      reservationFareRaw: [
+        `予約料金候補 ${reservationFareBytes ? bytesToHex(reservationFareBytes) : "-"}`,
+        "仕様候補: 0x0027 HEX ×10円"
+      ].join(" / "),
       otherFareCandidate: tariffDFare === null ? null : tariffDFare * 10,
       otherFareRaw: [
         `Dタリフ ${tariffDFareBytes ? bytesToHex(tariffDFareBytes) : "-"}`,
         "仕様: 0x0025 HEX ×10円"
+      ].join(" / "),
+      discountFareCandidate: decodeSignedByteAmount(discountFareByte),
+      discountFareRaw: [
+        `割引候補 ${discountFareByte === null ? "-" : `0x${discountFareByte.toString(16).padStart(2, "0").toUpperCase()}`}`,
+        "仕様候補: 0x0020 符号付き×10円"
       ].join(" / "),
       appDispatchFeeCandidate,
       appDispatchFeeRaw: [
